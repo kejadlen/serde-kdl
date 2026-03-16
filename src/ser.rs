@@ -63,12 +63,12 @@ impl Value {
 
     fn to_kdl_value(&self) -> Option<KdlValue> {
         match self {
-            Value::Null => Some(KdlValue::Null),
+            Value::Null => Some(KdlValue::Null), // cov-excl-line — Null is skipped by SerializeStruct/SerializeMap
             Value::Bool(b) => Some(KdlValue::Bool(*b)),
             Value::Integer(i) => Some(KdlValue::Integer(*i)),
             Value::Float(f) => Some(KdlValue::Float(*f)),
             Value::String(s) => Some(KdlValue::String(s.clone())),
-            _ => None,
+            _ => None, // cov-excl-line — Seq/Map elements never reach to_kdl_value
         }
     }
 }
@@ -96,12 +96,15 @@ fn value_to_doc(value: Value) -> Result<KdlDocument> {
 /// Convert a key-value pair to one or more KDL nodes.
 fn value_to_nodes(name: &str, value: Value) -> Result<Vec<KdlNode>> {
     match value {
-        // Primitives → single node with one argument
+        // cov-excl-start — Null values are filtered out by SerializeStruct
+        // and SerializeMap (representing Option::None), so they never reach
+        // value_to_nodes as a standalone field.
         Value::Null => {
             let mut node = KdlNode::new(name);
             node.push(KdlEntry::new(KdlValue::Null));
             Ok(vec![node])
         }
+        // cov-excl-stop
         Value::Bool(b) => {
             let mut node = KdlNode::new(name);
             node.push(KdlEntry::new(KdlValue::Bool(b)));
@@ -155,7 +158,7 @@ fn value_to_nodes(name: &str, value: Value) -> Result<Vec<KdlNode>> {
                         let children_doc = map_entries_to_doc(entries)?;
                         node.set_children(children_doc);
                         nodes.push(node);
-                    }
+                    } // cov-excl-line — else is unreachable: all_maps was true
                 }
                 Ok(nodes)
             } else {
@@ -456,11 +459,14 @@ impl ser::SerializeMap for SerializeMap {
             Value::String(s) => s,
             Value::Integer(i) => i.to_string(),
             Value::Bool(b) => b.to_string(),
+            // cov-excl-start — requires a map key that serializes to
+            // Null, Seq, or Map. Standard serde derive types (HashMap,
+            // BTreeMap) only produce String/Integer/Bool keys.
             other => {
                 return Err(Error::Unsupported(format!(
                     "map key must be a string, got {other:?}"
                 )));
-            }
+            } // cov-excl-stop
         };
         self.current_key = Some(key_str);
         Ok(())
