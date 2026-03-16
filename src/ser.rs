@@ -63,12 +63,12 @@ impl Value {
 
     fn to_kdl_value(&self) -> Option<KdlValue> {
         match self {
-            Value::Null => Some(KdlValue::Null), // cov-excl-line — Null is skipped by SerializeStruct/SerializeMap
+            Value::Null => Some(KdlValue::Null),
             Value::Bool(b) => Some(KdlValue::Bool(*b)),
             Value::Integer(i) => Some(KdlValue::Integer(*i)),
             Value::Float(f) => Some(KdlValue::Float(*f)),
             Value::String(s) => Some(KdlValue::String(s.clone())),
-            _ => None, // cov-excl-line — Seq/Map elements never reach to_kdl_value
+            _ => unreachable!("to_kdl_value is only called on primitive values"),
         }
     }
 }
@@ -96,15 +96,13 @@ fn value_to_doc(value: Value) -> Result<KdlDocument> {
 /// Convert a key-value pair to one or more KDL nodes.
 fn value_to_nodes(name: &str, value: Value) -> Result<Vec<KdlNode>> {
     match value {
-        // cov-excl-start — Null values are filtered out by SerializeStruct
-        // and SerializeMap (representing Option::None), so they never reach
-        // value_to_nodes as a standalone field.
+        // Null reaches value_to_nodes through the mixed-sequence `-`
+        // children path (e.g., Vec<Option<Vec<T>>> with a None element).
         Value::Null => {
             let mut node = KdlNode::new(name);
             node.push(KdlEntry::new(KdlValue::Null));
             Ok(vec![node])
         }
-        // cov-excl-stop
         Value::Bool(b) => {
             let mut node = KdlNode::new(name);
             node.push(KdlEntry::new(KdlValue::Bool(b)));
@@ -158,7 +156,9 @@ fn value_to_nodes(name: &str, value: Value) -> Result<Vec<KdlNode>> {
                         let children_doc = map_entries_to_doc(entries)?;
                         node.set_children(children_doc);
                         nodes.push(node);
-                    } // cov-excl-line — else is unreachable: all_maps was true
+                    } else {
+                        unreachable!("all_maps was true but element is not Map");
+                    }
                 }
                 Ok(nodes)
             } else {

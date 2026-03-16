@@ -2642,6 +2642,38 @@ fn serialize_vec_bools() {
     assert_eq!(val, roundtrip);
 }
 
+#[test]
+fn serialize_vec_option_with_nulls() {
+    // Exercises to_kdl_value Null branch: None serializes as Value::Null,
+    // is_primitive() is true for Null, so it reaches to_kdl_value.
+    #[derive(Serialize, Debug, PartialEq)]
+    struct S {
+        vals: Vec<Option<i32>>,
+    }
+    let val = S {
+        vals: vec![Some(1), None, Some(3)],
+    };
+    let output = serde_kdl::to_string(&val).unwrap();
+    assert!(output.contains("vals"));
+    assert!(output.contains("#null"));
+}
+
+#[test]
+fn serialize_mixed_seq_with_null() {
+    // Exercises value_to_nodes Null branch: a mixed sequence containing
+    // None alongside nested Vecs hits the `-` children path, which calls
+    // value_to_nodes("-", Value::Null).
+    #[derive(Serialize, Debug)]
+    struct S {
+        items: Vec<Option<Vec<i32>>>,
+    }
+    let val = S {
+        items: vec![Some(vec![1, 2]), None, Some(vec![3])],
+    };
+    let output = serde_kdl::to_string(&val).unwrap();
+    assert!(output.contains("#null"));
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // Remaining coverage: ValueDeserializer::deserialize_any Integer/Float
 // ════════════════════════════════════════════════════════════════════════

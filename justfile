@@ -23,7 +23,7 @@ coverage:
         -t covdir \
         --ignore-not-existing \
         --keep-only 'src/**' \
-        --excl-line 'cov-excl-line' \
+        --excl-line 'cov-excl-line|unreachable!' \
         --excl-start 'cov-excl-start' \
         --excl-stop 'cov-excl-stop')
     echo "$REPORT" | jq -r '
