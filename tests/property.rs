@@ -177,14 +177,12 @@ fn with_options_strategy() -> impl Strategy<Value = WithOptions> {
         prop::option::of(any::<i64>()),
         prop::option::of(any::<bool>()),
     )
-        .prop_map(
-            |(required, maybe_str, maybe_num, maybe_bool)| WithOptions {
-                required,
-                maybe_str,
-                maybe_num,
-                maybe_bool,
-            },
-        )
+        .prop_map(|(required, maybe_str, maybe_num, maybe_bool)| WithOptions {
+            required,
+            maybe_str,
+            maybe_num,
+            maybe_bool,
+        })
 }
 
 proptest! {
@@ -246,8 +244,7 @@ struct WithShape {
 fn shape_strategy() -> impl Strategy<Value = Shape> {
     prop_oneof![
         any::<i32>().prop_map(|radius| Shape::Circle { radius }),
-        (any::<i32>(), any::<i32>())
-            .prop_map(|(width, height)| Shape::Rectangle { width, height }),
+        (any::<i32>(), any::<i32>()).prop_map(|(width, height)| Shape::Rectangle { width, height }),
         Just(Shape::Point),
     ]
 }
