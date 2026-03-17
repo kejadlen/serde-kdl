@@ -599,44 +599,40 @@ fn doc_api() {
 // ════════════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct W_vi {
+struct WVi {
     values: Vec<i32>,
 }
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct W_ch {
+struct WCh {
     letter: char,
 }
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct W_bi {
+struct WBi {
     big_signed: i128,
     big_unsigned: u128,
 }
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct W_f32 {
+struct WF32 {
     value: f32,
 }
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct W_f64 {
-    value: f64,
-}
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct W_i128 {
+struct WI128 {
     value: i128,
 }
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct W_u128 {
+struct WU128 {
     value: u128,
 }
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct Meters(f64);
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct W_nt {
+struct WNt {
     length: Meters,
 }
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct Point3D(f64, f64, f64);
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct W_ts {
+struct WTs {
     pos: Point3D,
 }
 
@@ -646,60 +642,60 @@ enum Data {
     Pair(String, i32),
 }
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct W_data {
+struct WData {
     data: Data,
 }
 
 roundtrip!(
     roundtrip_vec_ints,
-    W_vi,
-    W_vi {
+    WVi,
+    WVi {
         values: vec![1, 2, 3, 4, 5]
     }
 );
-roundtrip!(roundtrip_char, W_ch, W_ch { letter: 'X' });
+roundtrip!(roundtrip_char, WCh, WCh { letter: 'X' });
 roundtrip!(
     roundtrip_i128_u128,
-    W_bi,
-    W_bi {
+    WBi,
+    WBi {
         big_signed: -1_000_000_000_000,
         big_unsigned: 1_000_000_000_000
     }
 );
-roundtrip!(roundtrip_f32, W_f32, W_f32 { value: 3.14 });
+roundtrip!(roundtrip_f32, WF32, WF32 { value: 3.14 });
 roundtrip!(
     roundtrip_i128,
-    W_i128,
-    W_i128 {
+    WI128,
+    WI128 {
         value: 170_141_183_460_469_231_731_687_303_715_884_105_727i128
     }
 );
-roundtrip!(roundtrip_u128, W_u128, W_u128 { value: 1000u128 });
+roundtrip!(roundtrip_u128, WU128, WU128 { value: 1000u128 });
 roundtrip!(
     roundtrip_newtype_struct,
-    W_nt,
-    W_nt {
+    WNt,
+    WNt {
         length: Meters(42.5)
     }
 );
 roundtrip!(
     roundtrip_tuple_struct,
-    W_ts,
-    W_ts {
+    WTs,
+    WTs {
         pos: Point3D(1.0, 2.0, 3.0)
     }
 );
 roundtrip!(
     roundtrip_tuple_variant,
-    W_data,
-    W_data {
+    WData,
+    WData {
         data: Data::Point(1.0, 2.0, 3.0)
     }
 );
 roundtrip!(
     roundtrip_tuple_variant_pair,
-    W_data,
-    W_data {
+    WData,
+    WData {
         data: Data::Pair(String::from("hello"), 42)
     }
 );
@@ -748,6 +744,7 @@ fn serialize_unit_value() {
     #[derive(Debug, Serialize, Deserialize, PartialEq)]
     struct S {
         label: String,
+        #[allow(dead_code)]
         marker: (),
     }
     let output = serde_kdl::to_string(&S {
@@ -770,7 +767,7 @@ fn serialize_explicit_null_value() {
 
 #[test]
 fn serialize_f32_field() {
-    let output = serde_kdl::to_string(&W_f32 { value: 2.5 }).unwrap();
+    let output = serde_kdl::to_string(&WF32 { value: 2.5 }).unwrap();
     assert!(output.contains("2.5"));
 }
 
@@ -978,7 +975,7 @@ deser_field_err!(deserialize_char_type_mismatch, ch: char, r#"ch "abc""#);
 deser_field_err!(deserialize_char_from_int_mismatch, ch: char, "ch 65");
 deser_field_err!(deserialize_integer_overflow, value: i8, "value 999");
 deser_field_err!(deserialize_node_no_args, value: String, "value");
-deser_err!(deserialize_u128_overflow, W_u128, "value -1");
+deser_err!(deserialize_u128_overflow, WU128, "value -1");
 deser_field_err!(deserialize_enum_no_match, color: Color, "color 42");
 deser_field_err!(deserialize_enum_non_string, color: Color, "color 42");
 deser_repeated_vec_err!(node_content_enum_error_in_seq, color: Vec<Color>, "color 42\n");
@@ -1020,6 +1017,7 @@ fn value_deserializer_any_float() {
 fn value_deserializer_unit_null() {
     #[derive(Deserialize, Debug)]
     struct S {
+        #[allow(dead_code)]
         marker: (),
         name: String,
     }
@@ -1072,6 +1070,7 @@ deser_field!(deserialize_any_with_multiple_args, values: Vec<i32>, "values 1 2 3
 fn deserialize_any_unit_node() {
     #[derive(Deserialize, Debug)]
     struct S {
+        #[allow(dead_code)]
         marker: (),
         name: String,
     }
@@ -1783,49 +1782,6 @@ fn value_deserializer_unit_struct_in_args() {
 // deserialize_bytes, deserialize_byte_buf).
 // ════════════════════════════════════════════════════════════════════════
 
-/// Generates a test with a custom Deserialize impl that calls the given
-/// deserializer method and forwards to visit_seq (collecting Vec<u8>).
-macro_rules! test_custom_seq_deser {
-    ($name:ident, $deser_method:ident, $field:ident, $input:expr, $expected:expr) => {
-        #[test]
-        fn $name() {
-            #[derive(Debug, PartialEq)]
-            struct Custom(Vec<u8>);
-            impl<'de> Deserialize<'de> for Custom {
-                fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
-                    struct V;
-                    impl<'de> serde::de::Visitor<'de> for V {
-                        type Value = Custom;
-                        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                            write!(f, "custom")
-                        }
-                        fn visit_seq<A: serde::de::SeqAccess<'de>>(
-                            self,
-                            mut seq: A,
-                        ) -> Result<Custom, A::Error> {
-                            let mut v = Vec::new();
-                            while let Some(b) = seq.next_element()? {
-                                v.push(b);
-                            }
-                            Ok(Custom(v))
-                        }
-                    }
-                    de.$deser_method(V)
-                }
-            }
-            #[derive(Deserialize, Debug, PartialEq)]
-            struct S {
-                $field: $crate::deser_target_type!($expected),
-            }
-            let val: S = serde_kdl::from_str($input).unwrap();
-            assert_eq!(val.$field, $expected);
-        }
-    };
-}
-
-// Helper: we need the type of the field to vary (Vec<Custom> vs Custom)
-// Let's just inline the struct definition in each test instead.
-
 /// Generates a test with a custom Deserialize impl calling `$deser_method`
 /// and using `visit_str` to produce a String wrapper.
 macro_rules! test_custom_str_deser {
@@ -1992,7 +1948,7 @@ test_custom_bytes_deser!(
 #[test]
 fn value_deserializer_bytes_type_mismatch_via_seq() {
     #[derive(Debug)]
-    struct Custom(Vec<u8>);
+    struct Custom(#[allow(dead_code)] Vec<u8>);
     impl<'de> Deserialize<'de> for Custom {
         fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
             struct V;
@@ -2021,7 +1977,7 @@ fn value_deserializer_bytes_type_mismatch_via_seq() {
 #[test]
 fn value_deserializer_bytes_type_mismatch() {
     #[derive(Debug)]
-    struct ByteString(Vec<u8>);
+    struct ByteString(#[allow(dead_code)] Vec<u8>);
     impl<'de> Deserialize<'de> for ByteString {
         fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
             struct V;
