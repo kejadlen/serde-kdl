@@ -1,7 +1,117 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-// ── Basic struct ───────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════
+// Macros for data-driven tests
+// ════════════════════════════════════════════════════════════════════════
+
+/// Test that deserializing KDL input produces the expected value.
+macro_rules! deser_ok {
+    ($name:ident, $ty:ty, $input:expr, $expected:expr) => {
+        #[test]
+        fn $name() {
+            let val: $ty = serde_kdl::from_str($input).unwrap();
+            assert_eq!(val, $expected);
+        }
+    };
+}
+
+/// Test that deserializing KDL input into `T` fails.
+macro_rules! deser_err {
+    ($name:ident, $ty:ty, $input:expr) => {
+        #[test]
+        fn $name() {
+            assert!(serde_kdl::from_str::<$ty>($input).is_err());
+        }
+    };
+}
+
+/// Test that a value roundtrips through serialize → deserialize.
+macro_rules! roundtrip {
+    ($name:ident, $ty:ty, $val:expr) => {
+        #[test]
+        fn $name() {
+            let val: $ty = $val;
+            let output = serde_kdl::to_string(&val).unwrap();
+            let rt: $ty = serde_kdl::from_str(&output).unwrap();
+            assert_eq!(val, rt);
+        }
+    };
+}
+
+/// Test that serializing a value fails.
+macro_rules! ser_err {
+    ($name:ident, $val:expr) => {
+        #[test]
+        fn $name() {
+            assert!(serde_kdl::to_string(&$val).is_err());
+        }
+    };
+}
+
+/// Test deserializing repeated nodes into Vec<T>.
+/// Defines a wrapper struct with the given field name internally.
+macro_rules! deser_repeated_vec {
+    ($name:ident, $field:ident: Vec<$ty:ty>, $input:expr, $expected:expr) => {
+        #[test]
+        fn $name() {
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct W {
+                $field: Vec<$ty>,
+            }
+            let val: W = serde_kdl::from_str($input).unwrap();
+            assert_eq!(val.$field, $expected);
+        }
+    };
+}
+
+/// Test that deserializing repeated nodes into Vec<T> fails.
+macro_rules! deser_repeated_vec_err {
+    ($name:ident, $field:ident: Vec<$ty:ty>, $input:expr) => {
+        #[test]
+        fn $name() {
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct W {
+                $field: Vec<$ty>,
+            }
+            assert!(serde_kdl::from_str::<W>($input).is_err());
+        }
+    };
+}
+
+/// Test deserializing into a wrapper with a single typed field.
+macro_rules! deser_field {
+    ($name:ident, $field:ident: $ty:ty, $input:expr, $expected:expr) => {
+        #[test]
+        fn $name() {
+            #[derive(Debug, Deserialize, PartialEq)]
+            struct W {
+                $field: $ty,
+            }
+            let val: W = serde_kdl::from_str($input).unwrap();
+            assert_eq!(val.$field, $expected);
+        }
+    };
+}
+
+/// Test that deserializing into a wrapper with a single typed field fails.
+macro_rules! deser_field_err {
+    ($name:ident, $field:ident: $ty:ty, $input:expr) => {
+        #[test]
+        fn $name() {
+            #[derive(Debug, Deserialize)]
+            struct W {
+                #[allow(dead_code)]
+                $field: $ty,
+            }
+            assert!(serde_kdl::from_str::<W>($input).is_err());
+        }
+    };
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Shared types
+// ════════════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct SimpleConfig {
@@ -10,36 +120,6 @@ struct SimpleConfig {
     enabled: bool,
     ratio: f64,
 }
-
-#[test]
-fn deserialize_simple_struct() {
-    let input = r#"
-title "My App"
-count 42
-enabled #true
-ratio 3.14
-"#;
-    let config: SimpleConfig = serde_kdl::from_str(input).unwrap();
-    assert_eq!(config.title, "My App");
-    assert_eq!(config.count, 42);
-    assert_eq!(config.enabled, true);
-    assert_eq!(config.ratio, 3.14);
-}
-
-#[test]
-fn serialize_simple_struct() {
-    let config = SimpleConfig {
-        title: "My App".into(),
-        count: 42,
-        enabled: true,
-        ratio: 3.14,
-    };
-    let output = serde_kdl::to_string(&config).unwrap();
-    let roundtrip: SimpleConfig = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(config, roundtrip);
-}
-
-// ── Nested struct ──────────────────────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct Server {
@@ -52,195 +132,6 @@ struct AppConfig {
     name: String,
     server: Server,
 }
-
-#[test]
-fn deserialize_nested_struct() {
-    let input = r#"
-name "webapp"
-server {
-    host "localhost"
-    port 8080
-}
-"#;
-    let config: AppConfig = serde_kdl::from_str(input).unwrap();
-    assert_eq!(config.name, "webapp");
-    assert_eq!(config.server.host, "localhost");
-    assert_eq!(config.server.port, 8080);
-}
-
-#[test]
-fn serialize_nested_struct() {
-    let config = AppConfig {
-        name: "webapp".into(),
-        server: Server {
-            host: "localhost".into(),
-            port: 8080,
-        },
-    };
-    let output = serde_kdl::to_string(&config).unwrap();
-    let roundtrip: AppConfig = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(config, roundtrip);
-}
-
-// ── Vec of primitives ──────────────────────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct Tagged {
-    name: String,
-    tags: Vec<String>,
-}
-
-#[test]
-fn deserialize_vec_primitives() {
-    let input = r#"
-name "project"
-tags "web" "rust" "config"
-"#;
-    let tagged: Tagged = serde_kdl::from_str(input).unwrap();
-    assert_eq!(tagged.name, "project");
-    assert_eq!(tagged.tags, vec!["web", "rust", "config"]);
-}
-
-#[test]
-fn serialize_vec_primitives() {
-    let tagged = Tagged {
-        name: "project".into(),
-        tags: vec!["web".into(), "rust".into(), "config".into()],
-    };
-    let output = serde_kdl::to_string(&tagged).unwrap();
-    let roundtrip: Tagged = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(tagged, roundtrip);
-}
-
-// ── Vec of structs (repeated nodes) ────────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct Cluster {
-    server: Vec<Server>,
-}
-
-#[test]
-fn deserialize_vec_structs() {
-    let input = r#"
-server {
-    host "localhost"
-    port 8080
-}
-server {
-    host "example.com"
-    port 443
-}
-"#;
-    let cluster: Cluster = serde_kdl::from_str(input).unwrap();
-    assert_eq!(cluster.server.len(), 2);
-    assert_eq!(cluster.server[0].host, "localhost");
-    assert_eq!(cluster.server[0].port, 8080);
-    assert_eq!(cluster.server[1].host, "example.com");
-    assert_eq!(cluster.server[1].port, 443);
-}
-
-#[test]
-fn serialize_vec_structs() {
-    let cluster = Cluster {
-        server: vec![
-            Server {
-                host: "localhost".into(),
-                port: 8080,
-            },
-            Server {
-                host: "example.com".into(),
-                port: 443,
-            },
-        ],
-    };
-    let output = serde_kdl::to_string(&cluster).unwrap();
-    let roundtrip: Cluster = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(cluster, roundtrip);
-}
-
-// ── Dash children convention ───────────────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct DashList {
-    items: Vec<i32>,
-}
-
-#[test]
-fn deserialize_dash_children() {
-    let input = r#"
-items {
-    - 1
-    - 2
-    - 3
-}
-"#;
-    let list: DashList = serde_kdl::from_str(input).unwrap();
-    assert_eq!(list.items, vec![1, 2, 3]);
-}
-
-// ── Option fields ──────────────────────────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct OptionalFields {
-    required: String,
-    optional: Option<String>,
-}
-
-#[test]
-fn deserialize_option_present() {
-    let input = r#"
-required "hello"
-optional "world"
-"#;
-    let val: OptionalFields = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.required, "hello");
-    assert_eq!(val.optional, Some("world".into()));
-}
-
-#[test]
-fn deserialize_option_absent() {
-    let input = r#"
-required "hello"
-"#;
-    let val: OptionalFields = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.required, "hello");
-    assert_eq!(val.optional, None);
-}
-
-#[test]
-fn deserialize_option_null() {
-    let input = r#"
-required "hello"
-optional #null
-"#;
-    let val: OptionalFields = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.required, "hello");
-    assert_eq!(val.optional, None);
-}
-
-#[test]
-fn serialize_option() {
-    let with = OptionalFields {
-        required: "hello".into(),
-        optional: Some("world".into()),
-    };
-    let output = serde_kdl::to_string(&with).unwrap();
-    assert!(output.contains("optional"));
-    let roundtrip: OptionalFields = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(with, roundtrip);
-
-    let without = OptionalFields {
-        required: "hello".into(),
-        optional: None,
-    };
-    let output = serde_kdl::to_string(&without).unwrap();
-    // None fields should be omitted
-    assert!(!output.contains("optional"));
-    let roundtrip: OptionalFields = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(without, roundtrip);
-}
-
-// ── Enum variants ──────────────────────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 enum Color {
@@ -255,29 +146,6 @@ struct Colored {
     color: Color,
 }
 
-#[test]
-fn deserialize_unit_variant() {
-    let input = r#"
-name "widget"
-color "Red"
-"#;
-    let val: Colored = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.color, Color::Red);
-}
-
-#[test]
-fn serialize_unit_variant() {
-    let val = Colored {
-        name: "widget".into(),
-        color: Color::Green,
-    };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: Colored = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
-}
-
-// ── Struct variant enum ────────────────────────────────────────────────
-
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 enum Shape {
     Circle { radius: f64 },
@@ -285,39 +153,247 @@ enum Shape {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
+struct UnitStruct;
+
+// ════════════════════════════════════════════════════════════════════════
+// Basic feature tests
+// ════════════════════════════════════════════════════════════════════════
+
+deser_ok!(
+    deserialize_simple_struct,
+    SimpleConfig,
+    "title \"My App\"\ncount 42\nenabled #true\nratio 3.14\n",
+    SimpleConfig {
+        title: "My App".into(),
+        count: 42,
+        enabled: true,
+        ratio: 3.14
+    }
+);
+
+roundtrip!(
+    serialize_simple_struct,
+    SimpleConfig,
+    SimpleConfig {
+        title: "My App".into(),
+        count: 42,
+        enabled: true,
+        ratio: 3.14,
+    }
+);
+
+deser_ok!(
+    deserialize_nested_struct,
+    AppConfig,
+    "name \"webapp\"\nserver {\n    host \"localhost\"\n    port 8080\n}\n",
+    AppConfig {
+        name: "webapp".into(),
+        server: Server {
+            host: "localhost".into(),
+            port: 8080,
+        },
+    }
+);
+
+roundtrip!(
+    serialize_nested_struct,
+    AppConfig,
+    AppConfig {
+        name: "webapp".into(),
+        server: Server {
+            host: "localhost".into(),
+            port: 8080,
+        },
+    }
+);
+
+// ── Vec of primitives ──────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+struct Tagged {
+    name: String,
+    tags: Vec<String>,
+}
+
+deser_ok!(
+    deserialize_vec_primitives,
+    Tagged,
+    "name \"project\"\ntags \"web\" \"rust\" \"config\"\n",
+    Tagged {
+        name: "project".into(),
+        tags: vec!["web".into(), "rust".into(), "config".into()],
+    }
+);
+
+roundtrip!(
+    serialize_vec_primitives,
+    Tagged,
+    Tagged {
+        name: "project".into(),
+        tags: vec!["web".into(), "rust".into(), "config".into()],
+    }
+);
+
+// ── Vec of structs ─────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+struct Cluster {
+    server: Vec<Server>,
+}
+
+deser_ok!(
+    deserialize_vec_structs,
+    Cluster,
+    "server {\n    host \"localhost\"\n    port 8080\n}\nserver {\n    host \"example.com\"\n    port 443\n}\n",
+    Cluster {
+        server: vec![
+            Server {
+                host: "localhost".into(),
+                port: 8080
+            },
+            Server {
+                host: "example.com".into(),
+                port: 443
+            },
+        ],
+    }
+);
+
+roundtrip!(
+    serialize_vec_structs,
+    Cluster,
+    Cluster {
+        server: vec![
+            Server {
+                host: "localhost".into(),
+                port: 8080
+            },
+            Server {
+                host: "example.com".into(),
+                port: 443
+            },
+        ],
+    }
+);
+
+// ── Dash children ──────────────────────────────────────────────────────
+
+deser_field!(
+    deserialize_dash_children,
+    items: Vec<i32>,
+    "items {\n    - 1\n    - 2\n    - 3\n}\n",
+    vec![1, 2, 3]
+);
+
+// ── Option fields ──────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+struct OptionalFields {
+    required: String,
+    optional: Option<String>,
+}
+
+deser_ok!(
+    deserialize_option_present,
+    OptionalFields,
+    "required \"hello\"\noptional \"world\"\n",
+    OptionalFields {
+        required: String::from("hello"),
+        optional: Some(String::from("world"))
+    }
+);
+
+deser_ok!(
+    deserialize_option_absent,
+    OptionalFields,
+    "required \"hello\"\n",
+    OptionalFields {
+        required: String::from("hello"),
+        optional: None
+    }
+);
+
+deser_ok!(
+    deserialize_option_null,
+    OptionalFields,
+    "required \"hello\"\noptional #null\n",
+    OptionalFields {
+        required: String::from("hello"),
+        optional: None
+    }
+);
+
+#[test]
+fn serialize_option() {
+    let with = OptionalFields {
+        required: String::from("hello"),
+        optional: Some(String::from("world")),
+    };
+    let output = serde_kdl::to_string(&with).unwrap();
+    assert!(output.contains("optional"));
+    let rt: OptionalFields = serde_kdl::from_str(&output).unwrap();
+    assert_eq!(with, rt);
+
+    let without = OptionalFields {
+        required: String::from("hello"),
+        optional: None,
+    };
+    let output = serde_kdl::to_string(&without).unwrap();
+    assert!(!output.contains("optional"));
+    let rt: OptionalFields = serde_kdl::from_str(&output).unwrap();
+    assert_eq!(without, rt);
+}
+
+// ── Enum variants ──────────────────────────────────────────────────────
+
+deser_ok!(
+    deserialize_unit_variant,
+    Colored,
+    "name \"widget\"\ncolor \"Red\"\n",
+    Colored {
+        name: "widget".into(),
+        color: Color::Red
+    }
+);
+
+roundtrip!(
+    serialize_unit_variant,
+    Colored,
+    Colored {
+        name: "widget".into(),
+        color: Color::Green
+    }
+);
+
+// ── Struct variant enum ────────────────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct Drawing {
     name: String,
     shape: Shape,
 }
 
-#[test]
-fn deserialize_struct_variant() {
-    let input = r#"
-name "my drawing"
-shape {
-    Circle {
-        radius 5.0
+deser_ok!(
+    deserialize_struct_variant,
+    Drawing,
+    "name \"my drawing\"\nshape {\n    Circle {\n        radius 5.0\n    }\n}\n",
+    Drawing {
+        name: "my drawing".into(),
+        shape: Shape::Circle { radius: 5.0 }
     }
-}
-"#;
-    let val: Drawing = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.name, "my drawing");
-    assert_eq!(val.shape, Shape::Circle { radius: 5.0 });
-}
+);
 
-#[test]
-fn serialize_struct_variant() {
-    let val = Drawing {
+roundtrip!(
+    serialize_struct_variant,
+    Drawing,
+    Drawing {
         name: "my drawing".into(),
         shape: Shape::Rectangle {
             width: 10.0,
-            height: 20.0,
+            height: 20.0
         },
-    };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: Drawing = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
-}
+    }
+);
 
 // ── Newtype variant enum ───────────────────────────────────────────────
 
@@ -332,26 +408,22 @@ struct Wrapped {
     value: Wrapper,
 }
 
-#[test]
-fn deserialize_newtype_variant() {
-    let input = r#"
-value {
-    Text "hello"
-}
-"#;
-    let val: Wrapped = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.value, Wrapper::Text("hello".into()));
-}
+deser_ok!(
+    deserialize_newtype_variant,
+    Wrapped,
+    "value {\n    Text \"hello\"\n}\n",
+    Wrapped {
+        value: Wrapper::Text(String::from("hello"))
+    }
+);
 
-#[test]
-fn serialize_newtype_variant() {
-    let val = Wrapped {
-        value: Wrapper::Text("hello".into()),
-    };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: Wrapped = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
-}
+roundtrip!(
+    serialize_newtype_variant,
+    Wrapped,
+    Wrapped {
+        value: Wrapper::Text(String::from("hello"))
+    }
+);
 
 // ── HashMap ────────────────────────────────────────────────────────────
 
@@ -362,13 +434,8 @@ struct WithMap {
 
 #[test]
 fn deserialize_hashmap() {
-    let input = r#"
-settings {
-    key1 "value1"
-    key2 "value2"
-}
-"#;
-    let val: WithMap = serde_kdl::from_str(input).unwrap();
+    let val: WithMap =
+        serde_kdl::from_str("settings {\n    key1 \"value1\"\n    key2 \"value2\"\n}\n").unwrap();
     assert_eq!(val.settings.get("key1"), Some(&"value1".into()));
     assert_eq!(val.settings.get("key2"), Some(&"value2".into()));
 }
@@ -379,8 +446,8 @@ fn serialize_hashmap() {
     settings.insert("key1".into(), "value1".into());
     let val = WithMap { settings };
     let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: WithMap = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
+    let rt: WithMap = serde_kdl::from_str(&output).unwrap();
+    assert_eq!(val, rt);
 }
 
 // ── Various integer types ──────────────────────────────────────────────
@@ -397,9 +464,10 @@ struct IntTypes {
     h: i64,
 }
 
-#[test]
-fn roundtrip_int_types() {
-    let val = IntTypes {
+roundtrip!(
+    roundtrip_int_types,
+    IntTypes,
+    IntTypes {
         a: 1,
         b: 2,
         c: 3,
@@ -407,37 +475,26 @@ fn roundtrip_int_types() {
         e: -1,
         f: -2,
         g: -3,
-        h: -4,
-    };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: IntTypes = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
-}
+        h: -4
+    }
+);
 
 // ── Tuple ──────────────────────────────────────────────────────────────
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct WithTuple {
-    point: (f64, f64, f64),
-}
-
-#[test]
-fn deserialize_tuple() {
-    let input = r#"
-point 1.0 2.0 3.0
-"#;
-    let val: WithTuple = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.point, (1.0, 2.0, 3.0));
-}
+deser_field!(deserialize_tuple, point: (f64, f64, f64), "point 1.0 2.0 3.0", (1.0, 2.0, 3.0));
 
 #[test]
 fn roundtrip_tuple() {
-    let val = WithTuple {
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
+    struct W {
+        point: (f64, f64, f64),
+    }
+    let val = W {
         point: (1.0, 2.0, 3.0),
     };
     let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: WithTuple = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
+    let rt: W = serde_kdl::from_str(&output).unwrap();
+    assert_eq!(val, rt);
 }
 
 // ── Deeply nested ──────────────────────────────────────────────────────
@@ -446,12 +503,10 @@ fn roundtrip_tuple() {
 struct Level3 {
     value: String,
 }
-
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct Level2 {
     inner: Level3,
 }
-
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct Level1 {
     middle: Level2,
@@ -459,22 +514,15 @@ struct Level1 {
 
 #[test]
 fn deeply_nested() {
-    let input = r#"
-middle {
-    inner {
-        value "deep"
-    }
-}
-"#;
+    let input = "middle {\n    inner {\n        value \"deep\"\n    }\n}\n";
     let val: Level1 = serde_kdl::from_str(input).unwrap();
     assert_eq!(val.middle.inner.value, "deep");
-
     let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: Level1 = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
+    let rt: Level1 = serde_kdl::from_str(&output).unwrap();
+    assert_eq!(val, rt);
 }
 
-// ── Boolean values ─────────────────────────────────────────────────────
+// ── Booleans ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct Booleans {
@@ -482,35 +530,36 @@ struct Booleans {
     no: bool,
 }
 
-#[test]
-fn booleans() {
-    let input = r#"
-yes #true
-no #false
-"#;
-    let val: Booleans = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.yes, true);
-    assert_eq!(val.no, false);
-
-    let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: Booleans = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
-}
+deser_ok!(
+    booleans_deser,
+    Booleans,
+    "yes #true\nno #false\n",
+    Booleans {
+        yes: true,
+        no: false
+    }
+);
+roundtrip!(
+    booleans_roundtrip,
+    Booleans,
+    Booleans {
+        yes: true,
+        no: false
+    }
+);
 
 // ── Empty vec ──────────────────────────────────────────────────────────
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct WithVec {
-    items: Vec<String>,
-}
-
 #[test]
 fn serialize_empty_vec() {
-    let val = WithVec { items: vec![] };
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
+    struct W {
+        items: Vec<String>,
+    }
+    let val = W { items: vec![] };
     let output = serde_kdl::to_string(&val).unwrap();
-    // Empty vec gets an empty children block
-    let roundtrip: WithVec = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(roundtrip.items, Vec::<String>::new());
+    let rt: W = serde_kdl::from_str(&output).unwrap();
+    assert_eq!(rt.items, Vec::<String>::new());
 }
 
 // ── to_string_pretty ───────────────────────────────────────────────────
@@ -525,9 +574,8 @@ fn pretty_print() {
         },
     };
     let pretty = serde_kdl::to_string_pretty(&config).unwrap();
-    // Should still roundtrip
-    let roundtrip: AppConfig = serde_kdl::from_str(&pretty).unwrap();
-    assert_eq!(config, roundtrip);
+    let rt: AppConfig = serde_kdl::from_str(&pretty).unwrap();
+    assert_eq!(config, rt);
 }
 
 // ── to_doc / from_doc ──────────────────────────────────────────────────
@@ -542,521 +590,669 @@ fn doc_api() {
     };
     let doc = serde_kdl::to_doc(&config).unwrap();
     assert!(doc.get("title").is_some());
-    let roundtrip: SimpleConfig = serde_kdl::from_doc(&doc).unwrap();
-    assert_eq!(config, roundtrip);
+    let rt: SimpleConfig = serde_kdl::from_doc(&doc).unwrap();
+    assert_eq!(config, rt);
 }
 
-// ── Vec of integers ────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════
+// Roundtrip tests — data-driven
+// ════════════════════════════════════════════════════════════════════════
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct Numbers {
+struct W_vi {
     values: Vec<i32>,
 }
-
-#[test]
-fn roundtrip_vec_ints() {
-    let val = Numbers {
-        values: vec![1, 2, 3, 4, 5],
-    };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: Numbers = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
-}
-
-// ── Char field ─────────────────────────────────────────────────────────
-
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct WithChar {
+struct W_ch {
     letter: char,
 }
-
-#[test]
-fn roundtrip_char() {
-    let val = WithChar { letter: 'X' };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: WithChar = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// Coverage expansion tests
-// ════════════════════════════════════════════════════════════════════════
-
-// ── Error trait impls ──────────────────────────────────────────────────
-
-#[test]
-fn error_display_variants() {
-    let err = serde_kdl::Error::TopLevelNotStruct;
-    assert_eq!(err.to_string(), "top-level type must be a struct or map");
-
-    let err = serde_kdl::Error::Message("custom error".into());
-    assert_eq!(err.to_string(), "custom error");
-
-    let err = serde_kdl::Error::TypeMismatch {
-        expected: "string",
-        got: "integer".into(),
-    };
-    assert!(err.to_string().contains("expected string"));
-
-    let err = serde_kdl::Error::MissingField("name".into());
-    assert!(err.to_string().contains("name"));
-
-    let err = serde_kdl::Error::IntegerOutOfRange(999999);
-    assert!(err.to_string().contains("999999"));
-
-    let err = serde_kdl::Error::UnknownVariant("Foo".into());
-    assert!(err.to_string().contains("Foo"));
-
-    let err = serde_kdl::Error::Unsupported("nope".into());
-    assert!(err.to_string().contains("nope"));
-}
-
-#[test]
-fn serde_error_custom_impls() {
-    // Exercise serde::de::Error::custom
-    let err = <serde_kdl::Error as serde::de::Error>::custom("deser fail");
-    assert_eq!(err.to_string(), "deser fail");
-
-    // Exercise serde::ser::Error::custom
-    let err = <serde_kdl::Error as serde::ser::Error>::custom("ser fail");
-    assert_eq!(err.to_string(), "ser fail");
-}
-
-// ── Serialization: top-level not struct ────────────────────────────────
-
-#[test]
-fn serialize_top_level_not_struct() {
-    let result = serde_kdl::to_string(&42i32);
-    assert!(result.is_err());
-    let err = result.unwrap_err();
-    assert!(matches!(err, serde_kdl::Error::TopLevelNotStruct));
-}
-
-#[test]
-fn serialize_top_level_string_err() {
-    let result = serde_kdl::to_string(&"hello");
-    assert!(result.is_err());
-}
-
-#[test]
-fn serialize_top_level_bool_err() {
-    let result = serde_kdl::to_string(&true);
-    assert!(result.is_err());
-}
-
-// ── Serialization: i128 / u128 ────────────────────────────────────────
-
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct BigInts {
+struct W_bi {
     big_signed: i128,
     big_unsigned: u128,
 }
-
-#[test]
-fn roundtrip_i128_u128() {
-    // Use values within KDL's representable integer range
-    let val = BigInts {
-        big_signed: -1_000_000_000_000i128,
-        big_unsigned: 1_000_000_000_000u128,
-    };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: BigInts = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
-}
-
-// ── Serialization: bytes ───────────────────────────────────────────────
-
-#[test]
-fn serialize_bytes() {
-    // serde_bytes triggers serialize_bytes
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    struct WithBytes {
-        #[serde(with = "serde_bytes_helper")]
-        data: Vec<u8>,
-    }
-
-    // Manually implement a bytes serializer/deserializer to exercise the path
-    mod serde_bytes_helper {
-        use serde::{Deserializer, Serializer};
-
-        pub fn serialize<S: Serializer>(data: &[u8], ser: S) -> Result<S::Ok, S::Error> {
-            ser.serialize_bytes(data)
-        }
-
-        pub fn deserialize<'de, D: Deserializer<'de>>(de: D) -> Result<Vec<u8>, D::Error> {
-            use serde::Deserialize;
-            Vec::<u8>::deserialize(de)
-        }
-    }
-
-    let val = WithBytes {
-        data: vec![1, 2, 3],
-    };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: WithBytes = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
-}
-
-// ── Serialization: unit and unit_struct ────────────────────────────────
-
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct UnitStruct;
-
+struct W_f32 {
+    value: f32,
+}
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct ContainsUnit {
-    label: String,
-    marker: (),
+struct W_f64 {
+    value: f64,
 }
-
-#[test]
-fn serialize_unit_value() {
-    let val = ContainsUnit {
-        label: "test".into(),
-        marker: (),
-    };
-    // Unit serializes as Null, which gets skipped as None
-    let output = serde_kdl::to_string(&val).unwrap();
-    assert!(output.contains("label"));
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+struct W_i128 {
+    value: i128,
 }
-
-// ── Serialization: newtype struct ──────────────────────────────────────
-
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+struct W_u128 {
+    value: u128,
+}
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct Meters(f64);
-
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct Distance {
+struct W_nt {
     length: Meters,
 }
-
-#[test]
-fn roundtrip_newtype_struct() {
-    let val = Distance {
-        length: Meters(42.5),
-    };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: Distance = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+struct Point3D(f64, f64, f64);
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+struct W_ts {
+    pos: Point3D,
 }
-
-// ── Serialization: tuple variant ───────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 enum Data {
     Point(f64, f64, f64),
     Pair(String, i32),
 }
-
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct WithData {
+struct W_data {
     data: Data,
 }
 
-#[test]
-fn roundtrip_tuple_variant() {
-    let val = WithData {
-        data: Data::Point(1.0, 2.0, 3.0),
-    };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: WithData = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
-}
-
-#[test]
-fn roundtrip_tuple_variant_pair() {
-    let val = WithData {
-        data: Data::Pair("hello".into(), 42),
-    };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: WithData = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
-}
-
-// ── Serialization: tuple struct ────────────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct Point3D(f64, f64, f64);
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct WithTupleStruct {
-    pos: Point3D,
-}
-
-#[test]
-fn roundtrip_tuple_struct() {
-    let val = WithTupleStruct {
-        pos: Point3D(1.0, 2.0, 3.0),
-    };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: WithTupleStruct = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
-}
-
-// ── Serialization: mixed sequences ─────────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct MixedSeq {
-    items: Vec<serde_json_like::Value>,
-}
-
-// A minimal enum to produce mixed sequences (primitives + maps).
-mod serde_json_like {
-    use serde::{Deserialize, Serialize};
-
-    #[derive(Debug, Serialize, Deserialize, PartialEq)]
-    #[serde(untagged)]
-    pub enum Value {
-        Num(i64),
-        Str(String),
+roundtrip!(
+    roundtrip_vec_ints,
+    W_vi,
+    W_vi {
+        values: vec![1, 2, 3, 4, 5]
     }
+);
+roundtrip!(roundtrip_char, W_ch, W_ch { letter: 'X' });
+roundtrip!(
+    roundtrip_i128_u128,
+    W_bi,
+    W_bi {
+        big_signed: -1_000_000_000_000,
+        big_unsigned: 1_000_000_000_000
+    }
+);
+roundtrip!(roundtrip_f32, W_f32, W_f32 { value: 3.14 });
+roundtrip!(
+    roundtrip_i128,
+    W_i128,
+    W_i128 {
+        value: 170_141_183_460_469_231_731_687_303_715_884_105_727i128
+    }
+);
+roundtrip!(roundtrip_u128, W_u128, W_u128 { value: 1000u128 });
+roundtrip!(
+    roundtrip_newtype_struct,
+    W_nt,
+    W_nt {
+        length: Meters(42.5)
+    }
+);
+roundtrip!(
+    roundtrip_tuple_struct,
+    W_ts,
+    W_ts {
+        pos: Point3D(1.0, 2.0, 3.0)
+    }
+);
+roundtrip!(
+    roundtrip_tuple_variant,
+    W_data,
+    W_data {
+        data: Data::Point(1.0, 2.0, 3.0)
+    }
+);
+roundtrip!(
+    roundtrip_tuple_variant_pair,
+    W_data,
+    W_data {
+        data: Data::Pair(String::from("hello"), 42)
+    }
+);
+
+// ════════════════════════════════════════════════════════════════════════
+// Serialization-specific tests
+// ════════════════════════════════════════════════════════════════════════
+
+ser_err!(serialize_top_level_not_struct, 42i32);
+ser_err!(serialize_top_level_string_err, "hello");
+ser_err!(serialize_top_level_bool_err, true);
+
+#[test]
+fn serialize_top_level_not_struct_error_type() {
+    let err = serde_kdl::to_string(&42i32).unwrap_err();
+    assert!(matches!(err, serde_kdl::Error::TopLevelNotStruct));
 }
 
 #[test]
-fn serialize_mixed_sequence() {
-    // When a sequence contains mixed types that all serialize as primitives,
-    // they should still produce a single node with multiple args.
-    let val = MixedSeq {
-        items: vec![
-            serde_json_like::Value::Num(1),
-            serde_json_like::Value::Num(2),
-        ],
+fn serialize_bytes() {
+    mod serde_bytes_helper {
+        use serde::{Deserializer, Serializer};
+        pub fn serialize<S: Serializer>(data: &[u8], ser: S) -> Result<S::Ok, S::Error> {
+            ser.serialize_bytes(data)
+        }
+        pub fn deserialize<'de, D: Deserializer<'de>>(de: D) -> Result<Vec<u8>, D::Error> {
+            use serde::Deserialize;
+            Vec::<u8>::deserialize(de)
+        }
+    }
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    struct W {
+        #[serde(with = "serde_bytes_helper")]
+        data: Vec<u8>,
+    }
+    let val = W {
+        data: vec![1, 2, 3],
     };
     let output = serde_kdl::to_string(&val).unwrap();
-    assert!(output.contains("items"));
+    let rt: W = serde_kdl::from_str(&output).unwrap();
+    assert_eq!(val, rt);
 }
 
-// ── Serialization: map with integer keys ───────────────────────────────
+#[test]
+fn serialize_unit_value() {
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
+    struct S {
+        label: String,
+        marker: (),
+    }
+    let output = serde_kdl::to_string(&S {
+        label: String::from("test"),
+        marker: (),
+    })
+    .unwrap();
+    assert!(output.contains("label"));
+}
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct IntKeyMap {
-    lookup: HashMap<i32, String>,
+#[test]
+fn serialize_explicit_null_value() {
+    #[derive(Serialize)]
+    struct S {
+        marker: UnitStruct,
+    }
+    let output = serde_kdl::to_string(&S { marker: UnitStruct }).unwrap();
+    assert!(!output.contains("marker"));
+}
+
+#[test]
+fn serialize_f32_field() {
+    let output = serde_kdl::to_string(&W_f32 { value: 2.5 }).unwrap();
+    assert!(output.contains("2.5"));
 }
 
 #[test]
 fn serialize_map_integer_keys() {
+    #[derive(Debug, Serialize)]
+    struct S {
+        lookup: HashMap<i32, String>,
+    }
     let mut lookup = HashMap::new();
     lookup.insert(1, "one".into());
-    lookup.insert(2, "two".into());
-    let val = IntKeyMap { lookup };
-    let output = serde_kdl::to_string(&val).unwrap();
-    assert!(output.contains("1") || output.contains("2"));
-}
-
-// ── Serialization: map with bool keys ──────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct BoolKeyMap {
-    flags: HashMap<bool, String>,
+    let output = serde_kdl::to_string(&S { lookup }).unwrap();
+    assert!(output.contains("1"));
 }
 
 #[test]
 fn serialize_map_bool_keys() {
+    #[derive(Debug, Serialize)]
+    struct S {
+        flags: HashMap<bool, String>,
+    }
     let mut flags = HashMap::new();
     flags.insert(true, "yes".into());
-    let val = BoolKeyMap { flags };
-    let output = serde_kdl::to_string(&val).unwrap();
+    let output = serde_kdl::to_string(&S { flags }).unwrap();
     assert!(output.contains("true"));
 }
 
-// ── Deserialization: f32 field ─────────────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct WithF32 {
-    value: f32,
+#[test]
+fn serialize_mixed_sequence() {
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
+    #[serde(untagged)]
+    enum V {
+        Num(i64),
+        Str(String),
+    }
+    #[derive(Debug, Serialize)]
+    struct S {
+        items: Vec<V>,
+    }
+    let output = serde_kdl::to_string(&S {
+        items: vec![V::Num(1), V::Num(2)],
+    })
+    .unwrap();
+    assert!(output.contains("items"));
 }
 
 #[test]
-fn roundtrip_f32() {
-    let val = WithF32 { value: 3.14 };
+fn serialize_mixed_primitive_sequence() {
+    #[derive(Serialize, Debug)]
+    #[serde(untagged)]
+    enum Mixed {
+        Int(i32),
+        Str(String),
+    }
+    #[derive(Serialize, Debug)]
+    struct S {
+        items: Vec<Mixed>,
+    }
+    let output = serde_kdl::to_string(&S {
+        items: vec![Mixed::Int(1), Mixed::Str("two".into()), Mixed::Int(3)],
+    })
+    .unwrap();
+    assert!(output.contains("items"));
+}
+
+#[test]
+fn serialize_nested_sequence() {
+    #[derive(Serialize, Debug)]
+    struct S {
+        matrix: Vec<Vec<i32>>,
+    }
+    let output = serde_kdl::to_string(&S {
+        matrix: vec![vec![1, 2], vec![3, 4]],
+    })
+    .unwrap();
+    assert!(output.contains("-"));
+}
+
+#[test]
+fn serialize_vec_bools() {
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    struct S {
+        flags: Vec<bool>,
+    }
+    let val = S {
+        flags: vec![true, false, true],
+    };
     let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: WithF32 = serde_kdl::from_str(&output).unwrap();
-    assert!((roundtrip.value - 3.14).abs() < 0.001);
+    let rt: S = serde_kdl::from_str(&output).unwrap();
+    assert_eq!(val, rt);
 }
 
 #[test]
-fn deserialize_f32_from_integer() {
-    let input = r#"value 3"#;
-    let val: WithF32 = serde_kdl::from_str(input).unwrap();
-    assert!((val.value - 3.0).abs() < 0.001);
-}
-
-// ── Deserialization: f64 from integer ──────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct WithF64 {
-    value: f64,
-}
-
-#[test]
-fn deserialize_f64_from_integer() {
-    let input = r#"value 42"#;
-    let val: WithF64 = serde_kdl::from_str(input).unwrap();
-    assert!((val.value - 42.0).abs() < 0.001);
-}
-
-// ── Deserialization: integer from float ────────────────────────────────
-
-#[test]
-fn deserialize_int_from_float() {
-    let input = r#"count 3.0"#;
-    #[derive(Deserialize)]
+fn serialize_vec_option_with_nulls() {
+    #[derive(Serialize, Debug)]
     struct S {
-        count: i32,
+        vals: Vec<Option<i32>>,
     }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.count, 3);
+    let output = serde_kdl::to_string(&S {
+        vals: vec![Some(1), None, Some(3)],
+    })
+    .unwrap();
+    assert!(output.contains("#null"));
 }
 
-// ── Deserialization: integer overflow ──────────────────────────────────
-
 #[test]
-fn deserialize_integer_overflow() {
-    let input = r#"value 999"#;
-    #[derive(Deserialize)]
+fn serialize_mixed_seq_with_null() {
+    #[derive(Serialize, Debug)]
     struct S {
-        value: i8,
+        items: Vec<Option<Vec<i32>>>,
     }
-    let result = serde_kdl::from_str::<S>(input);
-    assert!(result.is_err());
+    let output = serde_kdl::to_string(&S {
+        items: vec![Some(vec![1, 2]), None, Some(vec![3])],
+    })
+    .unwrap();
+    assert!(output.contains("#null"));
 }
 
-// ── Deserialization: type mismatches ───────────────────────────────────
-
 #[test]
-fn deserialize_bool_type_mismatch() {
-    let input = r#"flag "not a bool""#;
-    #[derive(Deserialize)]
+fn serialize_option_some_null_nested() {
+    #[derive(Serialize)]
     struct S {
-        flag: bool,
+        items: HashMap<String, Option<String>>,
     }
-    let result = serde_kdl::from_str::<S>(input);
-    assert!(result.is_err());
+    let mut items = HashMap::new();
+    items.insert("present".into(), Some("value".into()));
+    items.insert("absent".into(), None);
+    let output = serde_kdl::to_string(&S { items }).unwrap();
+    assert!(!output.contains("absent"));
+    assert!(output.contains("present"));
 }
 
 #[test]
-fn deserialize_string_type_mismatch() {
-    let input = r#"name 42"#;
-    #[derive(Deserialize)]
+fn serialize_unsupported_map_key() {
+    let err = serde_kdl::Error::Unsupported("map key must be a string, got Null".into());
+    assert!(err.to_string().contains("map key"));
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Error trait tests
+// ════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn error_display_variants() {
+    assert_eq!(
+        serde_kdl::Error::TopLevelNotStruct.to_string(),
+        "top-level type must be a struct or map"
+    );
+    assert_eq!(
+        serde_kdl::Error::Message("custom error".into()).to_string(),
+        "custom error"
+    );
+    assert!(
+        serde_kdl::Error::TypeMismatch {
+            expected: "string",
+            got: "integer".into()
+        }
+        .to_string()
+        .contains("expected string")
+    );
+    assert!(
+        serde_kdl::Error::MissingField("name".into())
+            .to_string()
+            .contains("name")
+    );
+    assert!(
+        serde_kdl::Error::IntegerOutOfRange(999999)
+            .to_string()
+            .contains("999999")
+    );
+    assert!(
+        serde_kdl::Error::UnknownVariant("Foo".into())
+            .to_string()
+            .contains("Foo")
+    );
+    assert!(
+        serde_kdl::Error::Unsupported("nope".into())
+            .to_string()
+            .contains("nope")
+    );
+}
+
+#[test]
+fn serde_error_custom_impls() {
+    assert_eq!(
+        <serde_kdl::Error as serde::de::Error>::custom("deser fail").to_string(),
+        "deser fail"
+    );
+    assert_eq!(
+        <serde_kdl::Error as serde::ser::Error>::custom("ser fail").to_string(),
+        "ser fail"
+    );
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Deserialization error tests — data-driven
+// ════════════════════════════════════════════════════════════════════════
+
+deser_err!(deserialize_invalid_kdl, SimpleConfig, "{{{{invalid");
+deser_field_err!(deserialize_bool_type_mismatch, flag: bool, r#"flag "not a bool""#);
+deser_field_err!(deserialize_string_type_mismatch, name: String, "name 42");
+deser_field_err!(deserialize_int_type_mismatch, value: i32, r#"value "not a number""#);
+deser_field_err!(deserialize_float_type_mismatch, value: f64, r#"value "not a float""#);
+deser_field_err!(deserialize_char_type_mismatch, ch: char, r#"ch "abc""#);
+deser_field_err!(deserialize_char_from_int_mismatch, ch: char, "ch 65");
+deser_field_err!(deserialize_integer_overflow, value: i8, "value 999");
+deser_field_err!(deserialize_node_no_args, value: String, "value");
+deser_err!(deserialize_u128_overflow, W_u128, "value -1");
+deser_field_err!(deserialize_enum_no_match, color: Color, "color 42");
+deser_field_err!(deserialize_enum_non_string, color: Color, "color 42");
+deser_repeated_vec_err!(node_content_enum_error_in_seq, color: Vec<Color>, "color 42\n");
+deser_field_err!(value_deserializer_unit_mismatch_in_args_err, vals: Vec<()>, "vals 42");
+
+#[test]
+fn field_deserialize_enum_multi_children_error() {
+    #[derive(Deserialize, Debug)]
     struct S {
-        name: String,
+        #[allow(dead_code)]
+        shape: Shape,
     }
-    let result = serde_kdl::from_str::<S>(input);
-    assert!(result.is_err());
+    assert!(serde_kdl::from_str::<S>("shape {\n    Circle {\n        radius 5.0\n    }\n    Rectangle {\n        width 10.0\n    }\n}\n").is_err());
 }
 
+// ════════════════════════════════════════════════════════════════════════
+// Deserialization: single-field tests — data-driven
+// ════════════════════════════════════════════════════════════════════════
+
+deser_field!(deserialize_f32_from_integer, value: f32, "value 3", 3.0f32);
+deser_field!(deserialize_f64_from_integer, value: f64, "value 42", 42.0f64);
+deser_field!(deserialize_int_from_float, count: i32, "count 3.0", 3);
+deser_field!(value_deserializer_any_integer, val: i128, "val 42", 42i128);
+deser_field!(value_deserializer_any_bool, val: bool, "val #true", true);
+deser_field!(value_deserializer_null_option, optional: Option<i32>, "optional #null", None);
+deser_field!(value_deserializer_any_null, val: Option<String>, "val #null", None);
+
 #[test]
-fn deserialize_int_type_mismatch() {
-    let input = r#"value "not a number""#;
-    #[derive(Deserialize)]
+fn value_deserializer_any_float() {
+    #[derive(Deserialize, Debug)]
     struct S {
-        value: i32,
+        val: f64,
     }
-    let result = serde_kdl::from_str::<S>(input);
-    assert!(result.is_err());
+    let val: S = serde_kdl::from_str("val 3.14").unwrap();
+    assert!((val.val - 3.14).abs() < 0.001);
 }
 
 #[test]
-fn deserialize_float_type_mismatch() {
-    let input = r#"value "not a float""#;
-    #[derive(Deserialize)]
-    struct S {
-        value: f64,
-    }
-    let result = serde_kdl::from_str::<S>(input);
-    assert!(result.is_err());
-}
-
-#[test]
-fn deserialize_char_type_mismatch() {
-    // Multi-character string can't be a char
-    let input = r#"ch "abc""#;
-    #[derive(Deserialize)]
-    struct S {
-        ch: char,
-    }
-    let result = serde_kdl::from_str::<S>(input);
-    assert!(result.is_err());
-}
-
-#[test]
-fn deserialize_char_from_int_mismatch() {
-    let input = r#"ch 65"#;
-    #[derive(Deserialize)]
-    struct S {
-        ch: char,
-    }
-    let result = serde_kdl::from_str::<S>(input);
-    assert!(result.is_err());
-}
-
-// ── Deserialization: KDL parse error ───────────────────────────────────
-
-#[test]
-fn deserialize_invalid_kdl() {
-    let result = serde_kdl::from_str::<SimpleConfig>("{{{{invalid");
-    assert!(result.is_err());
-}
-
-// ── Deserialization: node with no arguments ────────────────────────────
-
-#[test]
-fn deserialize_node_no_args() {
-    let input = r#"value"#;
-    #[derive(Deserialize)]
-    struct S {
-        value: String,
-    }
-    let result = serde_kdl::from_str::<S>(input);
-    assert!(result.is_err());
-}
-
-// ── Deserialization: FieldDeserializer::deserialize_any branches ───────
-
-#[test]
-fn deserialize_any_with_properties() {
-    // Properties on a node → map
-    let input = r#"item key="value""#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Outer {
-        item: HashMap<String, String>,
-    }
-    let val: Outer = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.item.get("key"), Some(&"value".into()));
-}
-
-#[test]
-fn deserialize_any_with_multiple_args() {
-    // Multiple args on a node → seq
-    let input = r#"values 1 2 3"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        values: Vec<i32>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.values, vec![1, 2, 3]);
-}
-
-#[test]
-fn deserialize_any_unit_node() {
-    // Node with no args, no children, no props → unit
-    let input = r#"
-marker
-name "test"
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
+fn value_deserializer_unit_null() {
+    #[derive(Deserialize, Debug)]
     struct S {
         marker: (),
         name: String,
     }
-    let val: S = serde_kdl::from_str(input).unwrap();
+    let val: S = serde_kdl::from_str("marker #null\nname \"test\"\n").unwrap();
     assert_eq!(val.name, "test");
 }
 
-// ── Deserialization: properties-based struct ───────────────────────────
+#[test]
+fn value_deserializer_unit_mismatch() {
+    #[derive(Deserialize, Debug)]
+    struct S {
+        marker: (),
+    }
+    let val: S = serde_kdl::from_str("marker 42").unwrap();
+    assert_eq!(val.marker, ());
+}
+
+deser_field!(value_deserializer_newtype_struct, val: (i32,), "val 42", (42,));
+
+// Actually, newtype struct requires a named wrapper:
+#[test]
+fn value_deserializer_newtype_struct_named() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct W(i32);
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        val: W,
+    }
+    let val: S = serde_kdl::from_str("val 42").unwrap();
+    assert_eq!(val.val, W(42));
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// FieldDeserializer::deserialize_any branches — data-driven via untagged
+// ════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn deserialize_any_with_properties() {
+    #[derive(Deserialize, Debug)]
+    struct S {
+        item: HashMap<String, String>,
+    }
+    let val: S = serde_kdl::from_str(r#"item key="value""#).unwrap();
+    assert_eq!(val.item.get("key"), Some(&"value".into()));
+}
+
+deser_field!(deserialize_any_with_multiple_args, values: Vec<i32>, "values 1 2 3", vec![1, 2, 3]);
+
+#[test]
+fn deserialize_any_unit_node() {
+    #[derive(Deserialize, Debug)]
+    struct S {
+        marker: (),
+        name: String,
+    }
+    let val: S = serde_kdl::from_str("marker\nname \"test\"\n").unwrap();
+    assert_eq!(val.name, "test");
+}
+
+// ── untagged enum branches ─────────────────────────────────────────────
+
+macro_rules! test_untagged_any {
+    ($name:ident, $variant_ty:ty, $input:expr, $check:expr) => {
+        #[test]
+        fn $name() {
+            #[derive(Deserialize, Debug, PartialEq)]
+            #[serde(untagged)]
+            enum DynVal {
+                V($variant_ty),
+            }
+            #[derive(Deserialize, Debug)]
+            struct S {
+                data: DynVal,
+            }
+            let val: S = serde_kdl::from_str($input).unwrap();
+            let DynVal::V(inner) = val.data;
+            let check: $variant_ty = $check;
+            assert_eq!(inner, check);
+        }
+    };
+}
+
+test_untagged_any!(
+    field_deserialize_any_single_arg,
+    String,
+    r#"data "hello""#,
+    String::from("hello")
+);
+test_untagged_any!(
+    field_deserialize_any_multi_arg,
+    Vec<String>,
+    r#"data "a" "b" "c""#,
+    vec!["a".into(), "b".into(), "c".into()]
+);
+test_untagged_any!(field_deserialize_any_children, HashMap<String, String>, "data {\n    key \"value\"\n}\n", { let mut m = HashMap::new(); m.insert("key".into(), "value".into()); m });
+test_untagged_any!(field_deserialize_any_props, HashMap<String, String>, r#"data key="value""#, { let mut m = HashMap::new(); m.insert("key".into(), "value".into()); m });
+
+#[test]
+fn field_deserialize_any_no_args() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    #[serde(untagged)]
+    enum DynVal {
+        Unit,
+    }
+    #[derive(Deserialize, Debug)]
+    struct S {
+        data: DynVal,
+    }
+    let val: S = serde_kdl::from_str("data").unwrap();
+    assert_eq!(val.data, DynVal::Unit);
+}
+
+#[test]
+fn field_deserialize_any_float() {
+    #[derive(Deserialize, Debug)]
+    #[serde(untagged)]
+    enum DynVal {
+        Float(f64),
+    }
+    #[derive(Deserialize, Debug)]
+    struct S {
+        data: DynVal,
+    }
+    let val: S = serde_kdl::from_str("data 3.14").unwrap();
+    let DynVal::Float(f) = val.data;
+    assert!((f - 3.14).abs() < 0.001);
+}
+
+#[test]
+fn field_deserialize_any_bool() {
+    #[derive(Deserialize, Debug)]
+    #[serde(untagged)]
+    enum DynVal {
+        Bool(bool),
+    }
+    #[derive(Deserialize, Debug)]
+    struct S {
+        data: DynVal,
+    }
+    let val: S = serde_kdl::from_str("data #true").unwrap();
+    let DynVal::Bool(b) = val.data;
+    assert!(b);
+}
+
+#[test]
+fn field_deserialize_any_null() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    #[serde(untagged)]
+    enum DynVal {
+        Nothing,
+        Str(String),
+    }
+    #[derive(Deserialize, Debug)]
+    struct S {
+        data: Option<DynVal>,
+    }
+    let val: S = serde_kdl::from_str("data #null").unwrap();
+    assert_eq!(val.data, None);
+}
+
+#[test]
+fn field_deserialize_any_integer_limitation() {
+    #[derive(Deserialize, Debug)]
+    #[serde(untagged)]
+    enum DynVal {
+        #[allow(dead_code)]
+        Num(i64),
+    }
+    #[derive(Deserialize, Debug)]
+    struct S {
+        #[allow(dead_code)]
+        data: DynVal,
+    }
+    assert!(serde_kdl::from_str::<S>("data 42").is_err());
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// DocumentDeserializer extra paths
+// ════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn document_deserialize_any_as_map() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    #[serde(untagged)]
+    enum TopLevel {
+        Config { name: String, label: String },
+    }
+    let val: TopLevel = serde_kdl::from_str("name \"test\"\nlabel \"hello\"\n").unwrap();
+    assert_eq!(
+        val,
+        TopLevel::Config {
+            name: String::from("test"),
+            label: String::from("hello")
+        }
+    );
+}
+
+#[test]
+fn document_deserialize_unit() {
+    let _: () = serde_kdl::from_str("").unwrap();
+}
+
+#[test]
+fn document_deserialize_unit_struct() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct Empty;
+    let _: Empty = serde_kdl::from_str("").unwrap();
+}
+
+#[test]
+fn document_deserialize_newtype_struct() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct Inner {
+        name: String,
+    }
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct Outer(Inner);
+    let val: Outer = serde_kdl::from_str("name \"test\"").unwrap();
+    assert_eq!(val.0.name, "test");
+}
+
+// ── Extra field handling (ignored_any) ─────────────────────────────────
+
+deser_field!(deserialize_with_extra_fields, name: String, "name \"test\"\nextra \"ignored\"\nanother 42\n", String::from("test"));
+deser_field!(document_deserialize_ignored_any, name: String, "name \"test\"\nunknown \"ignored\"\n", String::from("test"));
+deser_field!(field_ignored_any_with_children, name: String, "name \"test\"\ncomplex {\n    nested \"value\"\n    deep {\n        x 1\n    }\n}\n", String::from("test"));
+
+// ════════════════════════════════════════════════════════════════════════
+// Properties-based struct/map deserialization — data-driven
+// ════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn deserialize_struct_from_properties() {
-    let input = r#"point x=1.0 y=2.0"#;
     #[derive(Deserialize, Debug, PartialEq)]
     struct Point {
         x: f64,
@@ -1066,152 +1262,766 @@ fn deserialize_struct_from_properties() {
     struct S {
         point: Point,
     }
-    let val: S = serde_kdl::from_str(input).unwrap();
+    let val: S = serde_kdl::from_str(r#"point x=1.0 y=2.0"#).unwrap();
     assert_eq!(val.point, Point { x: 1.0, y: 2.0 });
 }
 
-// ── Deserialization: map from properties ───────────────────────────────
-
 #[test]
 fn deserialize_map_from_properties() {
-    let input = r#"meta author="Alice" version="1.0""#;
     #[derive(Deserialize, Debug)]
     struct S {
         meta: HashMap<String, String>,
     }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.meta.get("author"), Some(&"Alice".into()));
+    let val: S = serde_kdl::from_str(r#"meta author="Alice" version="1.0""#).unwrap();
+    assert_eq!(val.meta.get("author"), Some(&String::from("Alice")));
     assert_eq!(val.meta.get("version"), Some(&"1.0".into()));
 }
 
-// ── Deserialization: empty map/struct from node ────────────────────────
+deser_field!(deserialize_empty_map_from_node, meta: HashMap<String, String>, "meta", HashMap::new());
+
+// ── Non-dash children as sequence ──────────────────────────────────────
+
+deser_field!(deserialize_children_as_sequence, items: Vec<i32>, "items {\n    item 1\n    item 2\n    item 3\n}\n", vec![1, 2, 3]);
+
+// ════════════════════════════════════════════════════════════════════════
+// FieldDeserializer misc paths — data-driven
+// ════════════════════════════════════════════════════════════════════════
 
 #[test]
-fn deserialize_empty_map_from_node() {
-    let input = r#"meta"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        meta: HashMap<String, String>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert!(val.meta.is_empty());
-}
-
-// ── Deserialization: non-dash children as sequence ─────────────────────
-
-#[test]
-fn deserialize_children_as_sequence() {
-    // Children that aren't "-" nodes should still work as sequence elements
-    // when the target type is a Vec.
-    let input = r#"
-items {
-    item 1
-    item 2
-    item 3
-}
-"#;
+fn field_deserialize_unit_struct() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct Marker;
     #[derive(Deserialize, Debug, PartialEq)]
     struct S {
-        items: Vec<i32>,
+        tag: Marker,
     }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.items, vec![1, 2, 3]);
-}
-
-// ── Deserialization: i128 field ────────────────────────────────────────
-
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct WithI128 {
-    value: i128,
+    let val: S = serde_kdl::from_str("tag").unwrap();
+    assert_eq!(val.tag, Marker);
 }
 
 #[test]
-fn roundtrip_i128() {
-    let val = WithI128 {
-        value: 170_141_183_460_469_231_731_687_303_715_884_105_727i128,
+fn field_deserialize_newtype_struct() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct Inner {
+        x: i32,
+    }
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct W(Inner);
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        data: W,
+    }
+    let val: S = serde_kdl::from_str("data {\n    x 42\n}\n").unwrap();
+    assert_eq!(val.data, W(Inner { x: 42 }));
+}
+
+#[test]
+fn field_deserialize_struct_from_properties() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct Point {
+        x: f64,
+        y: f64,
+    }
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        pos: Point,
+    }
+    let val: S = serde_kdl::from_str("pos x=1.0 y=2.0").unwrap();
+    assert_eq!(val.pos, Point { x: 1.0, y: 2.0 });
+}
+
+#[test]
+fn field_deserialize_struct_single_arg() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct W {
+        value: i32,
+    }
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        item: W,
+    }
+    let val: S = serde_kdl::from_str("item 42").unwrap();
+    assert_eq!(val.item, W { value: 42 });
+}
+
+#[test]
+fn field_deserialize_struct_empty() {
+    #[derive(Deserialize, Debug, PartialEq, Default)]
+    struct Empty {
+        #[serde(default)]
+        a: Option<i32>,
+        #[serde(default)]
+        b: Option<String>,
+    }
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        data: Empty,
+    }
+    let val: S = serde_kdl::from_str("data").unwrap();
+    assert_eq!(val.data, Empty { a: None, b: None });
+}
+
+deser_field!(field_deserializer_bytes_as_seq, data: Vec<u8>, "data 72 101 108", vec![72u8, 101, 108]);
+
+deser_ok!(
+    deserialize_identifier_field,
+    Colored,
+    "name \"widget\"\ncolor \"Blue\"\n",
+    Colored {
+        name: "widget".into(),
+        color: Color::Blue
+    }
+);
+
+// ════════════════════════════════════════════════════════════════════════
+// Enum access paths — data-driven
+// ════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn enum_newtype_variant_via_arg() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    enum Val {
+        Number(i64),
+        Text(String),
+    }
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        value: Val,
+    }
+    let val: S = serde_kdl::from_str(r#"value "Number" 42"#).unwrap();
+    assert_eq!(val.value, Val::Number(42));
+}
+
+#[test]
+fn enum_tuple_variant_via_args() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    enum Val {
+        Point(f64, f64),
+    }
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        value: Val,
+    }
+    let val: S = serde_kdl::from_str(r#"value "Point" 1.0 2.0"#).unwrap();
+    assert_eq!(val.value, Val::Point(1.0, 2.0));
+}
+
+#[test]
+fn enum_struct_variant_via_props() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    enum Val {
+        Circle { radius: f64 },
+    }
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        value: Val,
+    }
+    let val: S = serde_kdl::from_str(r#"value "Circle" radius=5.0"#).unwrap();
+    assert_eq!(val.value, Val::Circle { radius: 5.0 });
+}
+
+#[test]
+fn enum_complex_unit_variant() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    enum Status {
+        Active,
+        Inactive,
+    }
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        status: Status,
+    }
+    let val: S = serde_kdl::from_str("status {\n    Active\n}\n").unwrap();
+    assert_eq!(val.status, Status::Active);
+}
+
+#[test]
+fn enum_complex_tuple_variant() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    enum Val {
+        Point(f64, f64, f64),
+    }
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        data: Val,
+    }
+    let val: S = serde_kdl::from_str("data {\n    Point 1.0 2.0 3.0\n}\n").unwrap();
+    assert_eq!(val.data, Val::Point(1.0, 2.0, 3.0));
+}
+
+#[test]
+fn enum_complex_struct_variant_from_props() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    enum Val {
+        Circle { radius: f64 },
+    }
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        shape: Val,
+    }
+    let val: S = serde_kdl::from_str("shape {\n    Circle radius=5.0\n}\n").unwrap();
+    assert_eq!(val.shape, Val::Circle { radius: 5.0 });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Repeated-node Vec<T> tests — data-driven
+//
+// NodeContentDeserializer is exercised when repeated nodes are
+// deserialized into Vec<T>. Each entry tests a different element type.
+// ════════════════════════════════════════════════════════════════════════
+
+deser_repeated_vec!(node_content_bool_in_seq,      flag: Vec<bool>,   "flag #true\nflag #false\n",  vec![true, false]);
+deser_repeated_vec!(node_content_i8_in_seq,         val: Vec<i8>,     "val 1\nval 2\n",             vec![1i8, 2]);
+deser_repeated_vec!(node_content_i16_in_seq,        val: Vec<i16>,    "val 1\nval 2\n",             vec![1i16, 2]);
+deser_repeated_vec!(node_content_i32_in_seq,        val: Vec<i32>,    "val 1\nval 2\n",             vec![1i32, 2]);
+deser_repeated_vec!(node_content_i64_in_seq,        val: Vec<i64>,    "val 1\nval 2\n",             vec![1i64, 2]);
+deser_repeated_vec!(node_content_i128_in_seq,       val: Vec<i128>,   "val 1\nval 2\n",             vec![1i128, 2]);
+deser_repeated_vec!(node_content_u8_in_seq,         val: Vec<u8>,     "val 1\nval 2\n",             vec![1u8, 2]);
+deser_repeated_vec!(node_content_u16_in_seq,        val: Vec<u16>,    "val 1\nval 2\n",             vec![1u16, 2]);
+deser_repeated_vec!(node_content_u32_in_seq,        val: Vec<u32>,    "val 1\nval 2\n",             vec![1u32, 2]);
+deser_repeated_vec!(node_content_u64_in_seq,        val: Vec<u64>,    "val 1\nval 2\n",             vec![1u64, 2]);
+deser_repeated_vec!(node_content_u128_in_seq,       val: Vec<u128>,   "val 1\nval 2\n",             vec![1u128, 2]);
+deser_repeated_vec!(node_content_f32_in_seq,        val: Vec<f32>,    "val 1.5\nval 2.5\n",         vec![1.5f32, 2.5]);
+deser_repeated_vec!(node_content_f64_in_seq,        val: Vec<f64>,    "val 1.5\nval 2.5\n",         vec![1.5f64, 2.5]);
+deser_repeated_vec!(node_content_char_in_seq,       ch: Vec<char>,    "ch \"A\"\nch \"B\"\n",       vec!['A', 'B']);
+deser_repeated_vec!(node_content_string_in_seq,     name: Vec<String>, "name \"Alice\"\nname \"Bob\"\n", vec![String::from("Alice"), String::from("Bob")]);
+deser_repeated_vec!(node_content_unit_in_seq,       marker: Vec<()>,  "marker\nmarker\n",           vec![(), ()]);
+
+deser_repeated_vec!(node_content_option_in_seq, val: Vec<Option<i32>>, "val 1\nval #null\nval 3\n", vec![Some(1), None, Some(3)]);
+
+deser_repeated_vec!(
+    node_content_tuple_in_seq, coords: Vec<(f64, f64)>,
+    "coords 1.0 2.0\ncoords 3.0 4.0\n",
+    vec![(1.0, 2.0), (3.0, 4.0)]
+);
+
+deser_repeated_vec!(
+    node_content_enum_in_seq, color: Vec<Color>,
+    "color \"Red\"\ncolor \"Blue\"\n",
+    vec![Color::Red, Color::Blue]
+);
+
+deser_repeated_vec!(
+    node_content_multi_arg_as_seq, coords: Vec<Vec<f64>>,
+    "coords 1.0 2.0 3.0\ncoords 4.0 5.0 6.0\n",
+    vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]
+);
+
+deser_repeated_vec!(
+    node_content_bytes_in_seq, data: Vec<Vec<u8>>,
+    "data 1 2 3\ndata 4 5 6\n",
+    vec![vec![1u8, 2, 3], vec![4, 5, 6]]
+);
+
+deser_repeated_vec!(
+    node_content_dash_children_in_seq, group: Vec<Vec<i32>>,
+    "group {\n    - 1\n    - 2\n}\ngroup {\n    - 3\n    - 4\n}\n",
+    vec![vec![1, 2], vec![3, 4]]
+);
+
+deser_repeated_vec!(
+    node_content_non_dash_children_seq, group: Vec<Vec<i32>>,
+    "group {\n    item 1\n    item 2\n}\ngroup {\n    item 3\n}\n",
+    vec![vec![1, 2], vec![3]]
+);
+
+deser_repeated_vec!(
+    node_content_seq_empty_children_fallthrough, vals: Vec<Vec<i32>>,
+    "vals 1 2 3\nvals 4 5 6\n",
+    vec![vec![1, 2, 3], vec![4, 5, 6]]
+);
+
+deser_repeated_vec!(
+    node_content_seq_args_fallthrough_empty_children, vals: Vec<Vec<i32>>,
+    "vals {\n}\nvals {\n}\n",
+    vec![Vec::<i32>::new(), Vec::<i32>::new()]
+);
+
+// ── Newtype/tuple struct in repeated nodes ─────────────────────────────
+
+#[test]
+fn node_content_newtype_in_seq() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct Meters(f64);
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        dist: Vec<Meters>,
+    }
+    let val: S = serde_kdl::from_str("dist 1.0\ndist 2.0\n").unwrap();
+    assert_eq!(val.dist, vec![Meters(1.0), Meters(2.0)]);
+}
+
+#[test]
+fn node_content_tuple_struct_in_seq() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct Pair(f64, f64);
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        pair: Vec<Pair>,
+    }
+    let val: S = serde_kdl::from_str("pair 1.0 2.0\npair 3.0 4.0\n").unwrap();
+    assert_eq!(val.pair, vec![Pair(1.0, 2.0), Pair(3.0, 4.0)]);
+}
+
+#[test]
+fn node_content_unit_struct_in_seq() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct Marker;
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        tag: Vec<Marker>,
+    }
+    let val: S = serde_kdl::from_str("tag\ntag\n").unwrap();
+    assert_eq!(val.tag, vec![Marker, Marker]);
+}
+
+// ── Struct from properties in repeated nodes ───────────────────────────
+
+#[test]
+fn node_content_struct_from_properties_in_seq() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct Point {
+        x: f64,
+        y: f64,
+    }
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        point: Vec<Point>,
+    }
+    let val: S = serde_kdl::from_str("point x=1.0 y=2.0\npoint x=3.0 y=4.0\n").unwrap();
+    assert_eq!(
+        val.point,
+        vec![Point { x: 1.0, y: 2.0 }, Point { x: 3.0, y: 4.0 }]
+    );
+}
+
+#[test]
+fn node_content_single_arg_struct_in_seq() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct W {
+        value: i32,
+    }
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        item: Vec<W>,
+    }
+    let val: S = serde_kdl::from_str("item 10\nitem 20\n").unwrap();
+    assert_eq!(val.item, vec![W { value: 10 }, W { value: 20 }]);
+}
+
+#[test]
+fn node_content_struct_empty_node_in_seq() {
+    #[derive(Deserialize, Debug, PartialEq, Default)]
+    struct Item {
+        #[serde(default)]
+        a: Option<i32>,
+        #[serde(default)]
+        b: Option<String>,
+    }
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        item: Vec<Item>,
+    }
+    let val: S = serde_kdl::from_str("item\nitem\n").unwrap();
+    assert_eq!(
+        val.item,
+        vec![Item { a: None, b: None }, Item { a: None, b: None }]
+    );
+}
+
+// ── Map from properties/children in repeated nodes ─────────────────────
+
+#[test]
+fn node_content_map_from_properties_in_seq() {
+    #[derive(Deserialize, Debug)]
+    struct S {
+        entry: Vec<HashMap<String, String>>,
+    }
+    let val: S = serde_kdl::from_str("entry a=\"1\" b=\"2\"\nentry c=\"3\"\n").unwrap();
+    assert_eq!(val.entry.len(), 2);
+    assert_eq!(val.entry[0].get("a"), Some(&"1".into()));
+}
+
+#[test]
+fn node_content_map_from_children() {
+    #[derive(Deserialize, Debug)]
+    struct S {
+        entry: Vec<HashMap<String, String>>,
+    }
+    let val: S =
+        serde_kdl::from_str("entry {\n    a \"1\"\n    b \"2\"\n}\nentry {\n    c \"3\"\n}\n")
+            .unwrap();
+    assert_eq!(val.entry[0].get("a"), Some(&"1".into()));
+    assert_eq!(val.entry[1].get("c"), Some(&"3".into()));
+}
+
+#[test]
+fn node_content_map_from_props_no_children() {
+    #[derive(Deserialize, Debug)]
+    struct S {
+        entry: Vec<HashMap<String, String>>,
+    }
+    let val: S = serde_kdl::from_str("entry a=\"1\" b=\"2\"\nentry c=\"3\"\n").unwrap();
+    assert_eq!(val.entry[0].get("a"), Some(&"1".into()));
+    assert_eq!(val.entry[1].get("c"), Some(&"3".into()));
+}
+
+// ── Complex enum in repeated nodes ─────────────────────────────────────
+
+#[test]
+fn node_content_complex_enum_in_seq() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        shape: Vec<Shape>,
+    }
+    let val: S = serde_kdl::from_str(
+        "shape {\n    Circle {\n        radius 5.0\n    }\n}\nshape {\n    Rectangle {\n        width 10.0\n        height 20.0\n    }\n}\n"
+    ).unwrap();
+    assert_eq!(val.shape[0], Shape::Circle { radius: 5.0 });
+    assert_eq!(
+        val.shape[1],
+        Shape::Rectangle {
+            width: 10.0,
+            height: 20.0
+        }
+    );
+}
+
+// ── Extra fields in repeated nodes (ignored_any) ───────────────────────
+
+#[test]
+fn node_content_ignored_any() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct Item {
+        name: String,
+    }
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        item: Vec<Item>,
+    }
+    let val: S = serde_kdl::from_str("item {\n    name \"test\"\n    extra \"ignored\"\n}\nitem {\n    name \"test2\"\n    bonus 99\n}\n").unwrap();
+    assert_eq!(val.item.len(), 2);
+    assert_eq!(val.item[0].name, "test");
+}
+
+// ── Repeated-node Vec for same-type via MultiNodeSeqAccess ─────────────
+
+#[test]
+fn node_content_with_children() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        server: Vec<Server>,
+    }
+    let val: S = serde_kdl::from_str(
+        "server {\n    host \"a\"\n    port 1\n}\nserver {\n    host \"b\"\n    port 2\n}\n",
+    )
+    .unwrap();
+    assert_eq!(val.server.len(), 2);
+}
+
+deser_repeated_vec!(
+    node_content_identifier_in_enum_seq, color: Vec<Color>,
+    "color \"Red\"\ncolor \"Green\"\n",
+    vec![Color::Red, Color::Green]
+);
+
+deser_repeated_vec!(
+    node_content_string_in_repeated_nodes, val: Vec<String>,
+    "val \"hello\"\nval \"world\"\n",
+    vec![String::from("hello"), String::from("world")]
+);
+
+// ════════════════════════════════════════════════════════════════════════
+// Multi-arg Vec<T> tests — data-driven
+//
+// ArgsSeqAccess is exercised when a single node has multiple positional
+// arguments deserialized into Vec<T>.
+// ════════════════════════════════════════════════════════════════════════
+
+deser_field!(args_seq_bool_values,   flags: Vec<bool>,   "flags #true #false #true",   vec![true, false, true]);
+deser_field!(args_seq_string_values, names: Vec<String>, r#"names "Alice" "Bob""#,      vec![String::from("Alice"), String::from("Bob")]);
+deser_field!(args_seq_char_values,   letters: Vec<char>, r#"letters "A" "B" "C""#,      vec!['A', 'B', 'C']);
+deser_field!(args_seq_i128_values,   vals: Vec<i128>,    "vals 100 200 300",            vec![100i128, 200, 300]);
+deser_field!(args_seq_u128_values,   vals: Vec<u128>,    "vals 100 200 300",            vec![100u128, 200, 300]);
+deser_field!(args_seq_f32_values,    vals: Vec<f32>,     "vals 1.5 2.5 3.5",            vec![1.5f32, 2.5, 3.5]);
+deser_field!(args_seq_f64_values,    vals: Vec<f64>,     "vals 1.5 2.5 3.5",            vec![1.5f64, 2.5, 3.5]);
+deser_field!(args_seq_enum_values,   colors: Vec<Color>, r#"colors "Red" "Blue" "Green""#, vec![Color::Red, Color::Blue, Color::Green]);
+deser_field!(args_seq_option_with_null, vals: Vec<Option<String>>, r#"vals "hello" #null "world""#, vec![Some(String::from("hello")), None, Some(String::from("world"))]);
+deser_field!(value_deserializer_bytes_from_string, data: Vec<u8>, "data 104 101 108", vec![104u8, 101, 108]);
+
+deser_field!(value_deserializer_unit_null_in_args, vals: Vec<()>, "vals #null #null", vec![(), ()]);
+
+#[test]
+fn args_seq_newtype_values() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct Meters(f64);
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        dists: Vec<Meters>,
+    }
+    let val: S = serde_kdl::from_str("dists 1.0 2.0 3.0").unwrap();
+    assert_eq!(val.dists, vec![Meters(1.0), Meters(2.0), Meters(3.0)]);
+}
+
+#[test]
+fn value_deserializer_unit_struct_in_args() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct Marker;
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        vals: Vec<Marker>,
+    }
+    let val: S = serde_kdl::from_str("vals #null #null").unwrap();
+    assert_eq!(val.vals, vec![Marker, Marker]);
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Custom Deserialize impl tests — data-driven via macro
+//
+// These test code paths reachable only through custom Deserialize impls
+// that call specific deserializer methods (deserialize_str,
+// deserialize_bytes, deserialize_byte_buf).
+// ════════════════════════════════════════════════════════════════════════
+
+/// Generates a test with a custom Deserialize impl that calls the given
+/// deserializer method and forwards to visit_seq (collecting Vec<u8>).
+macro_rules! test_custom_seq_deser {
+    ($name:ident, $deser_method:ident, $field:ident, $input:expr, $expected:expr) => {
+        #[test]
+        fn $name() {
+            #[derive(Debug, PartialEq)]
+            struct Custom(Vec<u8>);
+            impl<'de> Deserialize<'de> for Custom {
+                fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+                    struct V;
+                    impl<'de> serde::de::Visitor<'de> for V {
+                        type Value = Custom;
+                        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                            write!(f, "custom")
+                        }
+                        fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                            self,
+                            mut seq: A,
+                        ) -> Result<Custom, A::Error> {
+                            let mut v = Vec::new();
+                            while let Some(b) = seq.next_element()? {
+                                v.push(b);
+                            }
+                            Ok(Custom(v))
+                        }
+                    }
+                    de.$deser_method(V)
+                }
+            }
+            #[derive(Deserialize, Debug, PartialEq)]
+            struct S {
+                $field: $crate::deser_target_type!($expected),
+            }
+            let val: S = serde_kdl::from_str($input).unwrap();
+            assert_eq!(val.$field, $expected);
+        }
     };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: WithI128 = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
 }
 
-// ── Deserialization: u128 field ────────────────────────────────────────
+// Helper: we need the type of the field to vary (Vec<Custom> vs Custom)
+// Let's just inline the struct definition in each test instead.
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct WithU128 {
-    value: u128,
+/// Generates a test with a custom Deserialize impl calling `$deser_method`
+/// and using `visit_str` to produce a String wrapper.
+macro_rules! test_custom_str_deser {
+    ($name:ident, $deser_method:ident, field_type: $field_ty:ty, $field:ident, $input:expr, $expected:expr) => {
+        #[test]
+        fn $name() {
+            #[derive(Debug, PartialEq)]
+            struct Custom(String);
+            impl<'de> Deserialize<'de> for Custom {
+                fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+                    struct V;
+                    impl<'de> serde::de::Visitor<'de> for V {
+                        type Value = Custom;
+                        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                            write!(f, "custom str")
+                        }
+                        fn visit_str<E>(self, v: &str) -> Result<Custom, E> {
+                            Ok(Custom(v.to_string()))
+                        }
+                    }
+                    de.$deser_method(V)
+                }
+            }
+            #[derive(Deserialize, Debug, PartialEq)]
+            struct S {
+                $field: $field_ty,
+            }
+            let val: S = serde_kdl::from_str($input).unwrap();
+            assert_eq!(val.$field, $expected);
+        }
+    };
 }
+
+/// Generates a test with a custom Deserialize impl calling `$deser_method`
+/// and using `visit_bytes` to produce a Vec<u8> wrapper.
+macro_rules! test_custom_bytes_deser {
+    ($name:ident, $deser_method:ident, field_type: $field_ty:ty, $field:ident, $input:expr, $expected:expr) => {
+        #[test]
+        fn $name() {
+            #[derive(Debug, PartialEq)]
+            struct Custom(Vec<u8>);
+            impl<'de> Deserialize<'de> for Custom {
+                fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+                    struct V;
+                    impl<'de> serde::de::Visitor<'de> for V {
+                        type Value = Custom;
+                        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                            write!(f, "custom bytes")
+                        }
+                        fn visit_bytes<E>(self, v: &[u8]) -> Result<Custom, E> {
+                            Ok(Custom(v.to_vec()))
+                        }
+                    }
+                    de.$deser_method(V)
+                }
+            }
+            #[derive(Deserialize, Debug, PartialEq)]
+            struct S {
+                $field: $field_ty,
+            }
+            let val: S = serde_kdl::from_str($input).unwrap();
+            assert_eq!(val.$field, $expected);
+        }
+    };
+}
+
+/// Generates a test with a custom Deserialize impl calling `$deser_method`
+/// and using `visit_seq` to produce a Vec<u8> wrapper.
+macro_rules! test_custom_seq_bytes_deser {
+    ($name:ident, $deser_method:ident, field_type: $field_ty:ty, $field:ident, $input:expr, $expected:expr) => {
+        #[test]
+        fn $name() {
+            #[derive(Debug, PartialEq)]
+            struct Custom(Vec<u8>);
+            impl<'de> Deserialize<'de> for Custom {
+                fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+                    struct V;
+                    impl<'de> serde::de::Visitor<'de> for V {
+                        type Value = Custom;
+                        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                            write!(f, "custom seq bytes")
+                        }
+                        fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                            self,
+                            mut seq: A,
+                        ) -> Result<Custom, A::Error> {
+                            let mut v = Vec::new();
+                            while let Some(b) = seq.next_element()? {
+                                v.push(b);
+                            }
+                            Ok(Custom(v))
+                        }
+                    }
+                    de.$deser_method(V)
+                }
+            }
+            #[derive(Deserialize, Debug, PartialEq)]
+            struct S {
+                $field: $field_ty,
+            }
+            let val: S = serde_kdl::from_str($input).unwrap();
+            assert_eq!(val.$field, $expected);
+        }
+    };
+}
+
+// -- FieldDeserializer paths --
+
+test_custom_str_deser!(
+    field_deserializer_str, deserialize_str,
+    field_type: Custom, name,
+    r#"name "hello""#,
+    Custom(String::from("hello"))
+);
+
+test_custom_seq_bytes_deser!(
+    field_deserializer_byte_buf, deserialize_byte_buf,
+    field_type: Custom, data,
+    "data 1 2 3",
+    Custom(vec![1, 2, 3])
+);
+
+// -- NodeContentDeserializer paths (via Vec<Custom> in repeated nodes) --
+
+test_custom_seq_bytes_deser!(
+    node_content_bytes_custom_deser_in_seq, deserialize_bytes,
+    field_type: Vec<Custom>, data,
+    "data 1 2 3\ndata 4 5\n",
+    vec![Custom(vec![1, 2, 3]), Custom(vec![4, 5])]
+);
+
+test_custom_seq_bytes_deser!(
+    node_content_byte_buf_custom_deser_in_seq, deserialize_byte_buf,
+    field_type: Vec<Custom>, data,
+    "data 1 2 3\ndata 4 5\n",
+    vec![Custom(vec![1, 2, 3]), Custom(vec![4, 5])]
+);
+
+test_custom_str_deser!(
+    node_content_str_custom_deser_in_seq, deserialize_str,
+    field_type: Vec<Custom>, name,
+    "name \"hello\"\nname \"world\"\n",
+    vec![Custom(String::from("hello")), Custom(String::from("world"))]
+);
+
+// -- ValueDeserializer paths (via Vec<Custom> in multi-arg nodes) --
+
+test_custom_bytes_deser!(
+    value_deserializer_bytes_from_string_seq, deserialize_bytes,
+    field_type: Vec<Custom>, data,
+    r#"data "hello" "world""#,
+    vec![Custom(b"hello".to_vec()), Custom(b"world".to_vec())]
+);
+
+test_custom_bytes_deser!(
+    value_deserializer_byte_buf_via_seq, deserialize_byte_buf,
+    field_type: Vec<Custom>, data,
+    r#"data "hello""#,
+    vec![Custom(b"hello".to_vec())]
+);
+
+// -- ValueDeserializer error: deserialize_bytes on non-string --
 
 #[test]
-fn roundtrip_u128() {
-    let val = WithU128 { value: 1000u128 };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: WithU128 = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
-}
-
-#[test]
-fn deserialize_u128_overflow() {
-    let input = r#"value -1"#;
-    let result = serde_kdl::from_str::<WithU128>(input);
-    assert!(result.is_err());
-}
-
-// ── Deserialization: enum error paths ──────────────────────────────────
-
-#[test]
-fn deserialize_enum_no_match() {
-    // Node with integer arg, not a string → can't determine variant
-    let input = r#"color 42"#;
-    #[derive(Deserialize)]
-    struct S {
-        color: Color,
+fn value_deserializer_bytes_type_mismatch_via_seq() {
+    #[derive(Debug)]
+    struct Custom(Vec<u8>);
+    impl<'de> Deserialize<'de> for Custom {
+        fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+            struct V;
+            impl<'de> serde::de::Visitor<'de> for V {
+                type Value = Custom;
+                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    write!(f, "bytes")
+                }
+                fn visit_bytes<E>(self, v: &[u8]) -> Result<Custom, E> {
+                    Ok(Custom(v.to_vec()))
+                }
+            }
+            de.deserialize_bytes(V)
+        }
     }
-    let result = serde_kdl::from_str::<S>(input);
-    assert!(result.is_err());
-}
-
-// ── Deserialization: ValueDeserializer paths ───────────────────────────
-
-#[test]
-fn value_deserializer_null_option() {
-    let input = r#"
-required "hello"
-optional #null
-"#;
     #[derive(Deserialize, Debug)]
     struct S {
-        required: String,
-        optional: Option<i32>,
+        #[allow(dead_code)]
+        data: Vec<Custom>,
     }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.required, "hello");
-    assert_eq!(val.optional, None);
+    assert!(serde_kdl::from_str::<S>("data 42").is_err());
 }
 
-// ── Deserialization: bytes from value ──────────────────────────────────
-
-#[test]
-fn value_deserializer_bytes_from_string() {
-    // The FieldDeserializer::deserialize_bytes delegates to deserialize_seq,
-    // so bytes from a string node go through the seq path.
-    // Verify the seq path works for byte-like data.
-    let input = r#"data 104 101 108"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        data: Vec<u8>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.data, vec![104, 101, 108]);
-}
+// -- FieldDeserializer error: deserialize_bytes on non-seq --
 
 #[test]
 fn value_deserializer_bytes_type_mismatch() {
-    use serde::Deserialize;
-
     #[derive(Debug)]
     struct ByteString(Vec<u8>);
-
     impl<'de> Deserialize<'de> for ByteString {
         fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
             struct V;
@@ -1227,1965 +2037,23 @@ fn value_deserializer_bytes_type_mismatch() {
             de.deserialize_bytes(V)
         }
     }
-
     #[derive(Deserialize, Debug)]
     struct S {
+        #[allow(dead_code)]
         data: ByteString,
     }
-
-    let input = r#"data 42"#;
-    let result = serde_kdl::from_str::<S>(input);
-    assert!(result.is_err());
+    assert!(serde_kdl::from_str::<S>("data 42").is_err());
 }
 
-// ── Deserialization: ValueDeserializer unit ─────────────────────────────
-
-#[test]
-fn value_deserializer_unit_null() {
-    let input = r#"
-marker #null
-name "test"
-"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        marker: (),
-        name: String,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.name, "test");
-}
-
-#[test]
-fn value_deserializer_unit_mismatch() {
-    // FieldDeserializer::deserialize_unit always succeeds (calls visit_unit),
-    // so unit fields accept any node content. The ValueDeserializer error path
-    // for non-null unit is only reachable through direct ValueDeserializer use.
-    // Verify that a unit field with a value still works.
-    let input = r#"marker 42"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        marker: (),
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.marker, ());
-}
-
-// ── Deserialization: ValueDeserializer newtype struct ───────────────────
-
-#[test]
-fn value_deserializer_newtype_struct() {
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Wrapper(i32);
-
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        val: Wrapper,
-    }
-
-    let input = r#"val 42"#;
-    let v: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(v.val, Wrapper(42));
-}
-
-// ── Deserialization: ValueDeserializer seq/map/struct errors ────────────
+// ════════════════════════════════════════════════════════════════════════
+// Miscellaneous edge case tests
+// ════════════════════════════════════════════════════════════════════════
 
 #[test]
 fn value_deserializer_seq_error() {
-    // Trying to deserialize a scalar as a seq should fail
-    let input = r#"items 42"#;
-    #[derive(Deserialize)]
-    struct S {
-        items: Vec<i32>,
-    }
-    // This actually goes through FieldDeserializer, not ValueDeserializer,
-    // but a single arg won't match Vec. Let's force it differently.
-    // Actually, single-arg for a seq goes to ArgsSeqAccess with one element.
-    // The ValueDeserializer::deserialize_seq path is hit when a scalar KdlValue
-    // is used directly. This is hard to hit via the public API since the
-    // deserializer layer above handles seq. Let's just verify the error exists.
     let err = serde_kdl::Error::TypeMismatch {
         expected: "sequence",
         got: "scalar value".into(),
     };
     assert!(err.to_string().contains("sequence"));
-}
-
-// ── Deserialization: ValueDeserializer enum from string ─────────────────
-
-#[test]
-fn value_deserializer_enum_non_string() {
-    // Integer value can't be an enum variant name
-    let input = r#"
-color 42
-"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        color: Color,
-    }
-    let result = serde_kdl::from_str::<S>(input);
-    assert!(result.is_err());
-}
-
-// ── Deserialization: NodeContentDeserializer paths ──────────────────────
-
-#[test]
-fn node_content_with_children() {
-    // Vec of structs exercises MultiNodeSeqAccess → NodeContentDeserializer
-    let input = r#"
-server {
-    host "a"
-    port 1
-}
-server {
-    host "b"
-    port 2
-}
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        server: Vec<Server>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.server.len(), 2);
-}
-
-#[test]
-fn node_content_tuple_in_seq() {
-    // Vec of tuples exercises NodeContentDeserializer::deserialize_tuple
-    let input = r#"
-coords 1.0 2.0
-coords 3.0 4.0
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        coords: Vec<(f64, f64)>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.coords, vec![(1.0, 2.0), (3.0, 4.0)]);
-}
-
-#[test]
-fn node_content_enum_in_seq() {
-    // Vec of enums exercises NodeContentDeserializer::deserialize_enum
-    let input = r#"
-color "Red"
-color "Blue"
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        color: Vec<Color>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.color, vec![Color::Red, Color::Blue]);
-}
-
-#[test]
-fn node_content_option_in_seq() {
-    // Tests NodeContentDeserializer::deserialize_option
-    let input = r#"
-val 1
-val #null
-val 3
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        val: Vec<Option<i32>>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.val, vec![Some(1), None, Some(3)]);
-}
-
-#[test]
-fn node_content_string_in_seq() {
-    // Tests NodeContentDeserializer primitive delegation
-    let input = r#"
-name "Alice"
-name "Bob"
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        name: Vec<String>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.name, vec!["Alice", "Bob"]);
-}
-
-#[test]
-fn node_content_bool_in_seq() {
-    let input = r#"
-flag #true
-flag #false
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        flag: Vec<bool>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.flag, vec![true, false]);
-}
-
-#[test]
-fn node_content_int_types_in_seq() {
-    let input = r#"
-val 1
-val 2
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S8 {
-        val: Vec<i8>,
-    }
-    let val: S8 = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.val, vec![1i8, 2]);
-
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S16 {
-        val: Vec<i16>,
-    }
-    let val: S16 = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.val, vec![1i16, 2]);
-
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S64 {
-        val: Vec<i64>,
-    }
-    let val: S64 = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.val, vec![1i64, 2]);
-
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct U8 {
-        val: Vec<u8>,
-    }
-    let val: U8 = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.val, vec![1u8, 2]);
-
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct U16 {
-        val: Vec<u16>,
-    }
-    let val: U16 = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.val, vec![1u16, 2]);
-
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct U32 {
-        val: Vec<u32>,
-    }
-    let val: U32 = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.val, vec![1u32, 2]);
-
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct U64 {
-        val: Vec<u64>,
-    }
-    let val: U64 = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.val, vec![1u64, 2]);
-}
-
-#[test]
-fn node_content_i128_in_seq() {
-    let input = r#"
-val 1
-val 2
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        val: Vec<i128>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.val, vec![1i128, 2]);
-}
-
-#[test]
-fn node_content_u128_in_seq() {
-    let input = r#"
-val 1
-val 2
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        val: Vec<u128>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.val, vec![1u128, 2]);
-}
-
-#[test]
-fn node_content_f32_in_seq() {
-    let input = r#"
-val 1.5
-val 2.5
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        val: Vec<f32>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.val, vec![1.5f32, 2.5]);
-}
-
-#[test]
-fn node_content_f64_in_seq() {
-    let input = r#"
-val 1.5
-val 2.5
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        val: Vec<f64>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.val, vec![1.5f64, 2.5]);
-}
-
-#[test]
-fn node_content_char_in_seq() {
-    let input = r#"
-ch "A"
-ch "B"
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        ch: Vec<char>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.ch, vec!['A', 'B']);
-}
-
-// ── Deserialization: NodeContentDeserializer struct from properties ─────
-
-#[test]
-fn node_content_struct_from_properties_in_seq() {
-    let input = r#"
-point x=1.0 y=2.0
-point x=3.0 y=4.0
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Point {
-        x: f64,
-        y: f64,
-    }
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        point: Vec<Point>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.point.len(), 2);
-    assert_eq!(val.point[0], Point { x: 1.0, y: 2.0 });
-    assert_eq!(val.point[1], Point { x: 3.0, y: 4.0 });
-}
-
-// ── Deserialization: NodeContentDeserializer single-arg struct ──────────
-
-#[test]
-fn node_content_single_arg_struct_in_seq() {
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Wrapper {
-        value: i32,
-    }
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        item: Vec<Wrapper>,
-    }
-    let input = r#"
-item 10
-item 20
-"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.item.len(), 2);
-    assert_eq!(val.item[0], Wrapper { value: 10 });
-    assert_eq!(val.item[1], Wrapper { value: 20 });
-}
-
-// ── Deserialization: NodeContentDeserializer map from properties ────────
-
-#[test]
-fn node_content_map_from_properties_in_seq() {
-    let input = r#"
-entry a="1" b="2"
-entry c="3"
-"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        entry: Vec<HashMap<String, String>>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.entry.len(), 2);
-    assert_eq!(val.entry[0].get("a"), Some(&"1".into()));
-}
-
-// ── Deserialization: NodeContentDeserializer complex enum in seq ────────
-
-#[test]
-fn node_content_complex_enum_in_seq() {
-    let input = r#"
-shape {
-    Circle {
-        radius 5.0
-    }
-}
-shape {
-    Rectangle {
-        width 10.0
-        height 20.0
-    }
-}
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        shape: Vec<Shape>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.shape.len(), 2);
-    assert_eq!(val.shape[0], Shape::Circle { radius: 5.0 });
-    assert_eq!(
-        val.shape[1],
-        Shape::Rectangle {
-            width: 10.0,
-            height: 20.0
-        }
-    );
-}
-
-// ── Deserialization: NodeContentDeserializer unit ───────────────────────
-
-#[test]
-fn node_content_unit_in_seq() {
-    // A node with no args, no children → unit
-    let input = r#"
-marker
-marker
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        marker: Vec<()>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.marker, vec![(), ()]);
-}
-
-// ── Deserialization: NodeContentDeserializer newtype struct ─────────────
-
-#[test]
-fn node_content_newtype_in_seq() {
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Meters(f64);
-
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        dist: Vec<Meters>,
-    }
-    let input = r#"
-dist 1.0
-dist 2.0
-"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.dist, vec![Meters(1.0), Meters(2.0)]);
-}
-
-// ── Deserialization: NodeContentDeserializer seq of args ────────────────
-
-#[test]
-fn node_content_multi_arg_as_seq() {
-    // A node with multiple args, accessed via NodeContentDeserializer
-    // when that node is one element of a repeated-node sequence.
-    let input = r#"
-coords 1.0 2.0 3.0
-coords 4.0 5.0 6.0
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        coords: Vec<Vec<f64>>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.coords, vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]);
-}
-
-// ── Deserialization: NodeContentDeserializer bytes ──────────────────────
-
-#[test]
-fn node_content_bytes_in_seq() {
-    // Exercises NodeContentDeserializer::deserialize_bytes → deserialize_seq
-    let input = r#"
-data 1 2 3
-data 4 5 6
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        data: Vec<Vec<u8>>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.data, vec![vec![1u8, 2, 3], vec![4, 5, 6]]);
-}
-
-// ── Deserialization: NodeContentDeserializer dash children ──────────────
-
-#[test]
-fn node_content_dash_children_in_seq() {
-    let input = r#"
-group {
-    - 1
-    - 2
-}
-group {
-    - 3
-    - 4
-}
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        group: Vec<Vec<i32>>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.group, vec![vec![1, 2], vec![3, 4]]);
-}
-
-// ── Deserialization: NodeContentDeserializer tuple struct ───────────────
-
-#[test]
-fn node_content_tuple_struct_in_seq() {
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Pair(f64, f64);
-
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        pair: Vec<Pair>,
-    }
-    let input = r#"
-pair 1.0 2.0
-pair 3.0 4.0
-"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.pair, vec![Pair(1.0, 2.0), Pair(3.0, 4.0)]);
-}
-
-// ── Deserialization: NodeContentDeserializer enum error ─────────────────
-
-#[test]
-fn node_content_enum_error_in_seq() {
-    // A node with only an integer arg can't be deserialized as an enum
-    let input = r#"
-color 42
-"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        color: Vec<Color>,
-    }
-    let result = serde_kdl::from_str::<S>(input);
-    assert!(result.is_err());
-}
-
-// ── Deserialization: EnumUnitVariantAccess paths ───────────────────────
-
-#[test]
-fn enum_newtype_variant_via_arg() {
-    // Newtype variant where the variant name + value are both arguments
-    // e.g., `value "Number" 42`
-    // This exercises EnumUnitVariantAccess::newtype_variant_seed
-    #[derive(Deserialize, Debug, PartialEq)]
-    enum Val {
-        Number(i64),
-        Text(String),
-    }
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        value: Val,
-    }
-    let input = r#"value "Number" 42"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.value, Val::Number(42));
-}
-
-#[test]
-fn enum_tuple_variant_via_args() {
-    // Tuple variant where variant name + tuple elements are all arguments
-    // This exercises EnumUnitVariantAccess::tuple_variant
-    #[derive(Deserialize, Debug, PartialEq)]
-    enum Val {
-        Point(f64, f64),
-    }
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        value: Val,
-    }
-    let input = r#"value "Point" 1.0 2.0"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.value, Val::Point(1.0, 2.0));
-}
-
-#[test]
-fn enum_struct_variant_via_props() {
-    // Struct variant where variant name is a string arg and fields are properties
-    // This exercises EnumUnitVariantAccess::struct_variant
-    #[derive(Deserialize, Debug, PartialEq)]
-    enum Val {
-        Circle { radius: f64 },
-    }
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        value: Val,
-    }
-    let input = r#"value "Circle" radius=5.0"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.value, Val::Circle { radius: 5.0 });
-}
-
-// ── Deserialization: EnumComplexAccess additional paths ─────────────────
-
-#[test]
-fn enum_complex_unit_variant() {
-    // Unit variant via child node (no args, no children)
-    // This exercises EnumComplexVariantAccess::unit_variant
-    #[derive(Deserialize, Debug, PartialEq)]
-    enum Status {
-        Active,
-        Inactive,
-    }
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        status: Status,
-    }
-    // The node has a child node with the variant name and no further content
-    let input = r#"
-status {
-    Active
-}
-"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.status, Status::Active);
-}
-
-#[test]
-fn enum_complex_tuple_variant() {
-    // Tuple variant via child node with multiple args
-    // This exercises EnumComplexVariantAccess::tuple_variant
-    #[derive(Deserialize, Debug, PartialEq)]
-    enum Val {
-        Point(f64, f64, f64),
-    }
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        data: Val,
-    }
-    let input = r#"
-data {
-    Point 1.0 2.0 3.0
-}
-"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.data, Val::Point(1.0, 2.0, 3.0));
-}
-
-#[test]
-fn enum_complex_struct_variant_from_props() {
-    // Struct variant where variant node uses properties (no children block)
-    // This exercises EnumComplexVariantAccess::struct_variant → PropsMapAccess
-    #[derive(Deserialize, Debug, PartialEq)]
-    enum Val {
-        Circle { radius: f64 },
-    }
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        shape: Val,
-    }
-    let input = r#"
-shape {
-    Circle radius=5.0
-}
-"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.shape, Val::Circle { radius: 5.0 });
-}
-
-// ── Deserialization: DocumentDeserializer extra paths ───────────────────
-
-#[test]
-fn document_deserialize_newtype_struct() {
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Inner {
-        name: String,
-    }
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Outer(Inner);
-
-    let input = r#"name "test""#;
-    let val: Outer = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.0.name, "test");
-}
-
-#[test]
-fn document_deserialize_unit() {
-    // An empty document can be deserialized as unit
-    let input = r#""#;
-    let _: () = serde_kdl::from_str(input).unwrap();
-}
-
-#[test]
-fn document_deserialize_unit_struct() {
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Empty;
-    let input = r#""#;
-    let _: Empty = serde_kdl::from_str(input).unwrap();
-}
-
-// ── Serialization: Null field via explicit null ─────────────────────────
-
-#[test]
-fn serialize_explicit_null_value() {
-    // Option<T> = None serializes as Null, which is skipped.
-    // But we can test the Null arm of value_to_nodes by serializing
-    // a struct where a field produces Null through the serializer.
-    #[derive(Serialize)]
-    struct S {
-        // UnitStruct serializes as Null via serialize_unit_struct
-        marker: UnitStruct,
-    }
-    let val = S { marker: UnitStruct };
-    // UnitStruct → Null → skipped by SerializeStruct (same as None)
-    let output = serde_kdl::to_string(&val).unwrap();
-    // The marker field should be omitted (Null is skipped)
-    assert!(!output.contains("marker"));
-}
-
-// ── Serialization: f32 field ───────────────────────────────────────────
-
-#[test]
-fn serialize_f32_field() {
-    let val = WithF32 { value: 2.5 };
-    let output = serde_kdl::to_string(&val).unwrap();
-    assert!(output.contains("2.5"));
-}
-
-// ── FieldDeserializer: deserialize_bytes delegates to seq ──────────────
-
-#[test]
-fn field_deserializer_bytes_as_seq() {
-    // A node with multiple integer args deserialized as bytes
-    let input = r#"data 72 101 108"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        data: Vec<u8>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.data, vec![72, 101, 108]);
-}
-
-// ── FieldDeserializer: identifier delegates to str ─────────────────────
-
-#[test]
-fn deserialize_identifier_field() {
-    // serde uses deserialize_identifier for enum variant names and map keys.
-    // Already covered by enum tests, but verify an extra path.
-    let input = r#"
-name "widget"
-color "Blue"
-"#;
-    let val: Colored = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.color, Color::Blue);
-}
-
-// ── FieldDeserializer: ignored_any ─────────────────────────────────────
-
-#[test]
-fn deserialize_with_extra_fields() {
-    // Extra fields in KDL should be ignored when struct doesn't have them
-    let input = r#"
-name "test"
-extra "ignored"
-another 42
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        name: String,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.name, "test");
-}
-
-// ── NodeContentDeserializer: ignored_any ───────────────────────────────
-
-#[test]
-fn node_content_ignored_any() {
-    // A struct inside a seq with extra fields
-    let input = r#"
-item {
-    name "test"
-    extra "ignored"
-}
-item {
-    name "test2"
-    bonus 99
-}
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Item {
-        name: String,
-    }
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        item: Vec<Item>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.item.len(), 2);
-    assert_eq!(val.item[0].name, "test");
-}
-
-// ── Serialization: Null value in value_to_nodes ────────────────────────
-
-#[test]
-fn serialize_option_some_null_nested() {
-    // Option<Option<T>> where inner is None produces a Null that goes
-    // through value_to_nodes. But the SerializeStruct impl skips Null.
-    // We need a map-based serialization to exercise it.
-    // Use a HashMap<String, Option<String>> where a value is None.
-    #[derive(Serialize)]
-    struct S {
-        items: HashMap<String, Option<String>>,
-    }
-    let mut items = HashMap::new();
-    items.insert("present".into(), Some("value".into()));
-    items.insert("absent".into(), None);
-    let val = S { items };
-    let output = serde_kdl::to_string(&val).unwrap();
-    // "absent" should be skipped (None → Null → skipped by SerializeMap)
-    assert!(!output.contains("absent"));
-    assert!(output.contains("present"));
-}
-
-// ── ValueDeserializer: deserialize_any for all KDL types ───────────────
-
-#[test]
-fn value_deserializer_any_integer() {
-    // When a struct field is untyped (serde_value or similar),
-    // deserialize_any on an integer should work.
-    let input = r#"val 42"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        val: i128,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.val, 42);
-}
-
-#[test]
-fn value_deserializer_any_float() {
-    let input = r#"val 3.14"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        val: f64,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert!((val.val - 3.14).abs() < 0.001);
-}
-
-#[test]
-fn value_deserializer_any_bool() {
-    let input = r#"val #true"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        val: bool,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert!(val.val);
-}
-
-#[test]
-fn value_deserializer_any_null() {
-    let input = r#"val #null"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        val: Option<String>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.val, None);
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// Remaining coverage: DocumentDeserializer paths
-// ════════════════════════════════════════════════════════════════════════
-
-#[test]
-fn document_deserialize_any_as_map() {
-    // Use #[serde(untagged)] at the top level to exercise DocumentDeserializer::deserialize_any.
-    // Stick to string fields since serde's Content intermediary doesn't coerce i128→i32.
-    #[derive(Deserialize, Debug, PartialEq)]
-    #[serde(untagged)]
-    enum TopLevel {
-        Config { name: String, label: String },
-    }
-    let input = r#"
-name "test"
-label "hello"
-"#;
-    let val: TopLevel = serde_kdl::from_str(input).unwrap();
-    assert_eq!(
-        val,
-        TopLevel::Config {
-            name: "test".into(),
-            label: "hello".into()
-        }
-    );
-}
-
-#[test]
-fn document_deserialize_ignored_any() {
-    // #[serde(deny_unknown_fields)] is the opposite; instead, use a struct
-    // that ignores fields. The DocumentMapAccess sends unknown fields through
-    // deserialize_ignored_any on FieldDeserializer. But DocumentDeserializer's
-    // own deserialize_ignored_any is only called if the top-level deserializer
-    // itself is asked to ignore. This is hard to trigger directly.
-    // Let's just verify that extra fields don't cause errors with a basic struct.
-    let input = r#"
-name "test"
-unknown "ignored"
-"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        name: String,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.name, "test");
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// Remaining coverage: FieldDeserializer::deserialize_any branches
-// ════════════════════════════════════════════════════════════════════════
-
-#[test]
-fn field_deserialize_any_children() {
-    // Node with children → deserialize_any → deserialize_map.
-    // Use #[serde(untagged)] with string-only fields to avoid i128 coercion issues.
-    #[derive(Deserialize, Debug, PartialEq)]
-    #[serde(untagged)]
-    enum DynVal {
-        Map(HashMap<String, String>),
-    }
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        data: DynVal,
-    }
-    let input = r#"
-data {
-    key "value"
-}
-"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    match val.data {
-        DynVal::Map(m) => assert_eq!(m.get("key"), Some(&"value".into())),
-    }
-}
-
-#[test]
-fn field_deserialize_any_props() {
-    // Node with properties → deserialize_any → deserialize_map
-    #[derive(Deserialize, Debug, PartialEq)]
-    #[serde(untagged)]
-    enum DynVal {
-        Map(HashMap<String, String>),
-    }
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        data: DynVal,
-    }
-    let input = r#"data key="value""#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    match val.data {
-        DynVal::Map(m) => assert_eq!(m.get("key"), Some(&"value".into())),
-    }
-}
-
-#[test]
-fn field_deserialize_any_multi_arg() {
-    // Node with multiple args → deserialize_any → deserialize_seq.
-    // Use string elements to avoid i128 coercion in serde's Content.
-    #[derive(Deserialize, Debug, PartialEq)]
-    #[serde(untagged)]
-    enum DynVal {
-        Seq(Vec<String>),
-    }
-    #[derive(Deserialize, Debug)]
-    struct S {
-        data: DynVal,
-    }
-    let input = r#"data "a" "b" "c""#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    match val.data {
-        DynVal::Seq(v) => assert_eq!(v, vec!["a", "b", "c"]),
-    }
-}
-
-#[test]
-fn field_deserialize_any_single_arg() {
-    // Node with single arg → deserialize_any → ValueDeserializer::deserialize_any
-    #[derive(Deserialize, Debug, PartialEq)]
-    #[serde(untagged)]
-    enum DynVal {
-        Str(String),
-    }
-    #[derive(Deserialize, Debug)]
-    struct S {
-        data: DynVal,
-    }
-    let input = r#"data "hello""#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    match val.data {
-        DynVal::Str(s) => assert_eq!(s, "hello"),
-    }
-}
-
-#[test]
-fn field_deserialize_any_no_args() {
-    // Node with no args, no children, no props → deserialize_any → visit_unit
-    #[derive(Deserialize, Debug, PartialEq)]
-    #[serde(untagged)]
-    enum DynVal {
-        Unit,
-    }
-    #[derive(Deserialize, Debug)]
-    struct S {
-        data: DynVal,
-    }
-    let input = r#"data"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.data, DynVal::Unit);
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// Remaining coverage: FieldDeserializer misc paths
-// ════════════════════════════════════════════════════════════════════════
-
-#[test]
-fn field_deserialize_unit_struct() {
-    // Named unit struct as a field
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Marker;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        tag: Marker,
-    }
-    let input = r#"tag"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.tag, Marker);
-}
-
-#[test]
-fn field_deserialize_newtype_struct() {
-    // Newtype struct wrapping another struct, deserialized from a node with children
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Inner {
-        x: i32,
-    }
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Wrapper(Inner);
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        data: Wrapper,
-    }
-    let input = r#"
-data {
-    x 42
-}
-"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.data, Wrapper(Inner { x: 42 }));
-}
-
-#[test]
-fn field_deserialize_struct_from_properties() {
-    // struct fields from node properties, specifically exercising the
-    // FieldDeserializer::deserialize_struct → PropsMapAccess path
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Point {
-        x: f64,
-        y: f64,
-    }
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        pos: Point,
-    }
-    let input = r#"pos x=1.0 y=2.0"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.pos, Point { x: 1.0, y: 2.0 });
-}
-
-#[test]
-fn field_deserialize_struct_single_arg() {
-    // Struct with a single field from a single-arg node
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Wrapper {
-        value: i32,
-    }
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        item: Wrapper,
-    }
-    let input = r#"item 42"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.item, Wrapper { value: 42 });
-}
-
-#[test]
-fn field_deserialize_struct_empty() {
-    // Struct with no matching fields from a node with no content
-    #[derive(Deserialize, Debug, PartialEq, Default)]
-    struct Empty {
-        #[serde(default)]
-        a: Option<i32>,
-        #[serde(default)]
-        b: Option<String>,
-    }
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        data: Empty,
-    }
-    let input = r#"data"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.data, Empty { a: None, b: None });
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// Remaining coverage: ValueDeserializer methods via ArgsSeqAccess
-// ════════════════════════════════════════════════════════════════════════
-
-#[test]
-fn args_seq_option_with_null() {
-    // Multi-arg node where one arg is null → ValueDeserializer::deserialize_option
-    let input = r#"vals "hello" #null "world""#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        vals: Vec<Option<String>>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(
-        val.vals,
-        vec![Some("hello".into()), None, Some("world".into())]
-    );
-}
-
-#[test]
-fn args_seq_bool_values() {
-    // Multi-arg bools → ValueDeserializer::deserialize_bool
-    let input = r#"flags #true #false #true"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        flags: Vec<bool>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.flags, vec![true, false, true]);
-}
-
-#[test]
-fn args_seq_string_values() {
-    // Multi-arg strings → ValueDeserializer::deserialize_str
-    let input = r#"names "Alice" "Bob""#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        names: Vec<String>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.names, vec!["Alice", "Bob"]);
-}
-
-#[test]
-fn args_seq_enum_values() {
-    // Multi-arg enum unit variants → ValueDeserializer::deserialize_enum
-    let input = r#"colors "Red" "Blue" "Green""#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        colors: Vec<Color>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.colors, vec![Color::Red, Color::Blue, Color::Green]);
-}
-
-#[test]
-fn args_seq_char_values() {
-    // Multi-arg chars → ValueDeserializer::deserialize_char
-    let input = r#"letters "A" "B" "C""#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        letters: Vec<char>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.letters, vec!['A', 'B', 'C']);
-}
-
-#[test]
-fn args_seq_i128_values() {
-    let input = r#"vals 100 200 300"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        vals: Vec<i128>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.vals, vec![100i128, 200, 300]);
-}
-
-#[test]
-fn args_seq_u128_values() {
-    let input = r#"vals 100 200 300"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        vals: Vec<u128>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.vals, vec![100u128, 200, 300]);
-}
-
-#[test]
-fn args_seq_f32_values() {
-    let input = r#"vals 1.5 2.5 3.5"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        vals: Vec<f32>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.vals, vec![1.5f32, 2.5, 3.5]);
-}
-
-#[test]
-fn args_seq_f64_values() {
-    let input = r#"vals 1.5 2.5 3.5"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        vals: Vec<f64>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.vals, vec![1.5f64, 2.5, 3.5]);
-}
-
-#[test]
-fn args_seq_newtype_values() {
-    // Multi-arg newtype structs → ValueDeserializer::deserialize_newtype_struct
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Meters(f64);
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        dists: Vec<Meters>,
-    }
-    let input = r#"dists 1.0 2.0 3.0"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.dists, vec![Meters(1.0), Meters(2.0), Meters(3.0)]);
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// Remaining coverage: NodeContentDeserializer::deserialize_any branches
-// ════════════════════════════════════════════════════════════════════════
-
-// NodeContentDeserializer::deserialize_any branches are structurally identical
-// to FieldDeserializer::deserialize_any (tested above) and are exercised
-// through typed paths in the node_content_*_in_seq tests. Serde's untagged
-// enum Content buffering can't round-trip through tree-structured deserializers,
-// so we can't trigger deserialize_any on NodeContentDeserializer via the
-// public API. These branches are marked with cov-excl in the source.
-
-// ════════════════════════════════════════════════════════════════════════
-// Remaining coverage: NodeContentDeserializer remaining methods
-// ════════════════════════════════════════════════════════════════════════
-
-#[test]
-fn node_content_string_in_repeated_nodes() {
-    // Exercises NodeContentDeserializer::deserialize_string (not str)
-    let input = r#"
-val "hello"
-val "world"
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        val: Vec<String>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.val, vec!["hello", "world"]);
-}
-
-#[test]
-fn node_content_map_from_children() {
-    // Exercises NodeContentDeserializer::deserialize_map with children
-    let input = r#"
-entry {
-    a "1"
-    b "2"
-}
-entry {
-    c "3"
-}
-"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        entry: Vec<HashMap<String, String>>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.entry[0].get("a"), Some(&"1".into()));
-    assert_eq!(val.entry[1].get("c"), Some(&"3".into()));
-}
-
-#[test]
-fn node_content_map_from_props_no_children() {
-    // Exercises NodeContentDeserializer::deserialize_map without children (props fallback)
-    let input = r#"
-entry a="1" b="2"
-entry c="3"
-"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        entry: Vec<HashMap<String, String>>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.entry[0].get("a"), Some(&"1".into()));
-    assert_eq!(val.entry[1].get("c"), Some(&"3".into()));
-}
-
-#[test]
-fn node_content_non_dash_children_seq() {
-    // Exercises NodeContentDeserializer::deserialize_seq with non-dash children
-    let input = r#"
-group {
-    item 1
-    item 2
-}
-group {
-    item 3
-}
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        group: Vec<Vec<i32>>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.group, vec![vec![1, 2], vec![3]]);
-}
-
-#[test]
-fn node_content_identifier_in_enum_seq() {
-    // Exercises NodeContentDeserializer::deserialize_identifier (via enum deser)
-    let input = r#"
-color "Red"
-color "Green"
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        color: Vec<Color>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.color, vec![Color::Red, Color::Green]);
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// Remaining coverage: serialization paths
-// ════════════════════════════════════════════════════════════════════════
-
-#[test]
-fn serialize_mixed_primitive_sequence() {
-    // A sequence containing mixed types (via untagged enum) that all serialize
-    // as primitives: exercises the `all_primitive` branch in value_to_nodes.
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    #[serde(untagged)]
-    enum Mixed {
-        Int(i32),
-        Str(String),
-    }
-    #[derive(Serialize, Debug)]
-    struct S {
-        items: Vec<Mixed>,
-    }
-    let val = S {
-        items: vec![Mixed::Int(1), Mixed::Str("two".into()), Mixed::Int(3)],
-    };
-    let output = serde_kdl::to_string(&val).unwrap();
-    assert!(output.contains("items"));
-}
-
-#[test]
-fn serialize_nested_sequence() {
-    // A sequence of sequences → mixed (inner is Seq, not primitive/map)
-    // Exercises the "mixed or nested sequences → use `-` children" branch
-    #[derive(Serialize, Debug)]
-    struct S {
-        matrix: Vec<Vec<i32>>,
-    }
-    let val = S {
-        matrix: vec![vec![1, 2], vec![3, 4]],
-    };
-    let output = serde_kdl::to_string(&val).unwrap();
-    // Should use `-` children convention
-    assert!(output.contains("matrix"));
-    assert!(output.contains("-"));
-}
-
-#[test]
-fn serialize_unsupported_map_key() {
-    // A map with a float key → unsupported
-    #[derive(Serialize, Debug)]
-    struct S {
-        data: HashMap<f64, String>,
-    }
-    // f64 doesn't implement Hash, so let's use a custom serializer
-    // Actually, we can test this indirectly. The error path in ser.rs
-    // fires when a map key serializes to something other than String/Integer/Bool.
-    // Float keys would trigger it, but HashMap<f64, _> won't compile.
-    // The path is for Null/Seq/Map keys. These are rare in practice.
-    // Just verify the error variant exists.
-    let err = serde_kdl::Error::Unsupported("map key must be a string, got Null".into());
-    assert!(err.to_string().contains("map key"));
-}
-
-#[test]
-fn serialize_vec_bools() {
-    // Exercises to_kdl_value Bool branch via all_primitive sequence path
-    #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    struct S {
-        flags: Vec<bool>,
-    }
-    let val = S {
-        flags: vec![true, false, true],
-    };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let roundtrip: S = serde_kdl::from_str(&output).unwrap();
-    assert_eq!(val, roundtrip);
-}
-
-#[test]
-fn serialize_vec_option_with_nulls() {
-    // Exercises to_kdl_value Null branch: None serializes as Value::Null,
-    // is_primitive() is true for Null, so it reaches to_kdl_value.
-    #[derive(Serialize, Debug, PartialEq)]
-    struct S {
-        vals: Vec<Option<i32>>,
-    }
-    let val = S {
-        vals: vec![Some(1), None, Some(3)],
-    };
-    let output = serde_kdl::to_string(&val).unwrap();
-    assert!(output.contains("vals"));
-    assert!(output.contains("#null"));
-}
-
-#[test]
-fn serialize_mixed_seq_with_null() {
-    // Exercises value_to_nodes Null branch: a mixed sequence containing
-    // None alongside nested Vecs hits the `-` children path, which calls
-    // value_to_nodes("-", Value::Null).
-    #[derive(Serialize, Debug)]
-    struct S {
-        items: Vec<Option<Vec<i32>>>,
-    }
-    let val = S {
-        items: vec![Some(vec![1, 2]), None, Some(vec![3])],
-    };
-    let output = serde_kdl::to_string(&val).unwrap();
-    assert!(output.contains("#null"));
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// Remaining coverage: ValueDeserializer::deserialize_any Integer/Float
-// ════════════════════════════════════════════════════════════════════════
-
-#[test]
-fn field_deserialize_any_integer_limitation() {
-    // ValueDeserializer::deserialize_any calls visit_i128 for integers,
-    // but serde's Content buffer (used by untagged enums) doesn't handle
-    // i128. This means integers through deserialize_any only work with
-    // serde types that accept visit_i128 directly. The Integer branch in
-    // ValueDeserializer::deserialize_any is excluded from coverage.
-    #[derive(Deserialize, Debug)]
-    #[serde(untagged)]
-    enum DynVal {
-        Num(i64),
-    }
-    #[derive(Deserialize, Debug)]
-    struct S {
-        data: DynVal,
-    }
-    let result = serde_kdl::from_str::<S>(r#"data 42"#);
-    assert!(result.is_err());
-}
-
-#[test]
-fn field_deserialize_any_float() {
-    // Single float arg → FieldDeserializer::deserialize_any → ValueDeserializer::deserialize_any (Float branch)
-    #[derive(Deserialize, Debug, PartialEq)]
-    #[serde(untagged)]
-    enum DynVal {
-        Float(f64),
-    }
-    #[derive(Deserialize, Debug)]
-    struct S {
-        data: DynVal,
-    }
-    let input = r#"data 3.14"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    match val.data {
-        DynVal::Float(f) => assert!((f - 3.14).abs() < 0.001),
-    }
-}
-
-#[test]
-fn field_deserialize_any_bool() {
-    // Single bool arg → FieldDeserializer::deserialize_any → ValueDeserializer::deserialize_any (Bool branch)
-    #[derive(Deserialize, Debug, PartialEq)]
-    #[serde(untagged)]
-    enum DynVal {
-        Bool(bool),
-    }
-    #[derive(Deserialize, Debug)]
-    struct S {
-        data: DynVal,
-    }
-    let input = r#"data #true"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    match val.data {
-        DynVal::Bool(b) => assert!(b),
-    }
-}
-
-#[test]
-fn field_deserialize_any_null() {
-    // Single null arg → FieldDeserializer::deserialize_any → ValueDeserializer::deserialize_any (Null branch)
-    #[derive(Deserialize, Debug, PartialEq)]
-    #[serde(untagged)]
-    enum DynVal {
-        Nothing,
-        Str(String),
-    }
-    #[derive(Deserialize, Debug)]
-    struct S {
-        data: Option<DynVal>,
-    }
-    let input = r#"data #null"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.data, None);
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// Remaining: FieldDeserializer::deserialize_ignored_any
-// ════════════════════════════════════════════════════════════════════════
-
-#[test]
-fn field_ignored_any_with_children() {
-    // A struct that ignores a field with children content
-    let input = r#"
-name "test"
-complex {
-    nested "value"
-    deep {
-        x 1
-    }
-}
-"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        name: String,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.name, "test");
-}
-
-// ════════════════════════════════════════════════════════════════════════
-// Remaining: FieldDeserializer::deserialize_enum error (multi-child)
-// ════════════════════════════════════════════════════════════════════════
-
-#[test]
-fn field_deserialize_enum_multi_children_error() {
-    // A node with multiple children nodes can't determine which is the variant
-    let input = r#"
-shape {
-    Circle {
-        radius 5.0
-    }
-    Rectangle {
-        width 10.0
-    }
-}
-"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        shape: Shape,
-    }
-    let result = serde_kdl::from_str::<S>(input);
-    assert!(result.is_err());
-}
-
-#[test]
-fn node_content_seq_empty_children_fallthrough() {
-    // A repeated node with empty children block falls through to args
-    let input = r#"
-vals 1 2 3
-vals 4 5 6
-"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        vals: Vec<Vec<i32>>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.vals, vec![vec![1, 2, 3], vec![4, 5, 6]]);
-}
-
-#[test]
-fn node_content_seq_args_fallthrough_empty_children() {
-    // NodeContentDeserializer::deserialize_seq: node with empty children block
-    // falls through to args. Need a repeated-node element with empty children
-    // that deserializes as a seq from args.
-    let input = "vals {\n}\nvals {\n}\n";
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        vals: Vec<Vec<i32>>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.vals, vec![Vec::<i32>::new(), Vec::<i32>::new()]);
-}
-
-#[test]
-fn node_content_struct_empty_node_in_seq() {
-    // NodeContentDeserializer::deserialize_struct fallthrough:
-    // An empty node targeting a multi-field struct inside a Vec.
-    #[derive(Deserialize, Debug, PartialEq, Default)]
-    struct Item {
-        #[serde(default)]
-        a: Option<i32>,
-        #[serde(default)]
-        b: Option<String>,
-    }
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        item: Vec<Item>,
-    }
-    let input = "item\nitem\n";
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(
-        val.item,
-        vec![Item { a: None, b: None }, Item { a: None, b: None }]
-    );
-}
-
-#[test]
-fn node_content_unit_struct_in_seq() {
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Marker;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        tag: Vec<Marker>,
-    }
-    let input = "tag\ntag\n";
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.tag, vec![Marker, Marker]);
-}
-
-#[test]
-fn node_content_bytes_custom_deser_in_seq() {
-    // Custom type that calls deserialize_bytes inside a Vec (repeated nodes).
-    // This exercises NodeContentDeserializer::deserialize_bytes.
-    #[derive(Debug, PartialEq)]
-    struct ByteData(Vec<u8>);
-
-    impl<'de> Deserialize<'de> for ByteData {
-        fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
-            struct V;
-            impl<'de> serde::de::Visitor<'de> for V {
-                type Value = ByteData;
-                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    write!(f, "byte data")
-                }
-                fn visit_seq<A: serde::de::SeqAccess<'de>>(
-                    self,
-                    mut seq: A,
-                ) -> Result<ByteData, A::Error> {
-                    let mut bytes = Vec::new();
-                    while let Some(b) = seq.next_element()? {
-                        bytes.push(b);
-                    }
-                    Ok(ByteData(bytes))
-                }
-            }
-            de.deserialize_bytes(V)
-        }
-    }
-
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        data: Vec<ByteData>,
-    }
-    let input = "data 1 2 3\ndata 4 5\n";
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(
-        val.data,
-        vec![ByteData(vec![1, 2, 3]), ByteData(vec![4, 5])]
-    );
-}
-
-#[test]
-fn node_content_byte_buf_custom_deser_in_seq() {
-    // Custom type that calls deserialize_byte_buf inside a Vec (repeated nodes).
-    #[derive(Debug, PartialEq)]
-    struct ByteBufData(Vec<u8>);
-
-    impl<'de> Deserialize<'de> for ByteBufData {
-        fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
-            struct V;
-            impl<'de> serde::de::Visitor<'de> for V {
-                type Value = ByteBufData;
-                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    write!(f, "byte buf data")
-                }
-                fn visit_seq<A: serde::de::SeqAccess<'de>>(
-                    self,
-                    mut seq: A,
-                ) -> Result<ByteBufData, A::Error> {
-                    let mut bytes = Vec::new();
-                    while let Some(b) = seq.next_element()? {
-                        bytes.push(b);
-                    }
-                    Ok(ByteBufData(bytes))
-                }
-            }
-            de.deserialize_byte_buf(V)
-        }
-    }
-
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        data: Vec<ByteBufData>,
-    }
-    let input = "data 1 2 3\ndata 4 5\n";
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(
-        val.data,
-        vec![ByteBufData(vec![1, 2, 3]), ByteBufData(vec![4, 5])]
-    );
-}
-
-#[test]
-fn field_deserializer_byte_buf() {
-    // Custom type that calls deserialize_byte_buf on a FieldDeserializer.
-    #[derive(Debug, PartialEq)]
-    struct OwnedBytes(Vec<u8>);
-
-    impl<'de> Deserialize<'de> for OwnedBytes {
-        fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
-            struct V;
-            impl<'de> serde::de::Visitor<'de> for V {
-                type Value = OwnedBytes;
-                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    write!(f, "owned bytes")
-                }
-                fn visit_seq<A: serde::de::SeqAccess<'de>>(
-                    self,
-                    mut seq: A,
-                ) -> Result<OwnedBytes, A::Error> {
-                    let mut bytes = Vec::new();
-                    while let Some(b) = seq.next_element()? {
-                        bytes.push(b);
-                    }
-                    Ok(OwnedBytes(bytes))
-                }
-            }
-            de.deserialize_byte_buf(V)
-        }
-    }
-
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        data: OwnedBytes,
-    }
-    let input = "data 1 2 3";
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.data, OwnedBytes(vec![1, 2, 3]));
-}
-
-#[test]
-fn field_deserializer_str() {
-    // Custom type that calls deserialize_str on a FieldDeserializer.
-    #[derive(Debug, PartialEq)]
-    struct BorrowStr(String);
-
-    impl<'de> Deserialize<'de> for BorrowStr {
-        fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
-            struct V;
-            impl<'de> serde::de::Visitor<'de> for V {
-                type Value = BorrowStr;
-                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    write!(f, "a string")
-                }
-                fn visit_str<E>(self, v: &str) -> Result<BorrowStr, E> {
-                    Ok(BorrowStr(v.to_string()))
-                }
-            }
-            de.deserialize_str(V)
-        }
-    }
-
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        name: BorrowStr,
-    }
-    let input = r#"name "hello""#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.name, BorrowStr("hello".into()));
-}
-
-#[test]
-fn node_content_str_custom_deser_in_seq() {
-    // Custom type calling deserialize_str inside a Vec (repeated nodes).
-    #[derive(Debug, PartialEq)]
-    struct BorrowStr2(String);
-
-    impl<'de> Deserialize<'de> for BorrowStr2 {
-        fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
-            struct V;
-            impl<'de> serde::de::Visitor<'de> for V {
-                type Value = BorrowStr2;
-                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    write!(f, "a string")
-                }
-                fn visit_str<E>(self, v: &str) -> Result<BorrowStr2, E> {
-                    Ok(BorrowStr2(v.to_string()))
-                }
-            }
-            de.deserialize_str(V)
-        }
-    }
-
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        name: Vec<BorrowStr2>,
-    }
-    let input = "name \"hello\"\nname \"world\"\n";
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(
-        val.name,
-        vec![BorrowStr2("hello".into()), BorrowStr2("world".into())]
-    );
-}
-
-#[test]
-fn value_deserializer_bytes_from_string_seq() {
-    // Custom type that calls deserialize_bytes on a ValueDeserializer
-    // (reached via ArgsSeqAccess from a multi-arg node).
-    #[derive(Debug, PartialEq)]
-    struct RawBytes(Vec<u8>);
-
-    impl<'de> Deserialize<'de> for RawBytes {
-        fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
-            struct V;
-            impl<'de> serde::de::Visitor<'de> for V {
-                type Value = RawBytes;
-                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    write!(f, "bytes")
-                }
-                fn visit_bytes<E>(self, v: &[u8]) -> Result<RawBytes, E> {
-                    Ok(RawBytes(v.to_vec()))
-                }
-            }
-            de.deserialize_bytes(V)
-        }
-    }
-
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        data: Vec<RawBytes>,
-    }
-    let input = r#"data "hello" "world""#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(
-        val.data,
-        vec![RawBytes(b"hello".to_vec()), RawBytes(b"world".to_vec())]
-    );
-}
-
-#[test]
-fn value_deserializer_bytes_type_mismatch_via_seq() {
-    // Exercise the error path in ValueDeserializer::deserialize_bytes
-    // when a non-string value is encountered.
-    #[derive(Debug)]
-    struct RawBytes2(Vec<u8>);
-
-    impl<'de> Deserialize<'de> for RawBytes2 {
-        fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
-            struct V;
-            impl<'de> serde::de::Visitor<'de> for V {
-                type Value = RawBytes2;
-                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    write!(f, "bytes")
-                }
-                fn visit_bytes<E>(self, v: &[u8]) -> Result<RawBytes2, E> {
-                    Ok(RawBytes2(v.to_vec()))
-                }
-            }
-            de.deserialize_bytes(V)
-        }
-    }
-
-    #[derive(Deserialize, Debug)]
-    struct S {
-        data: Vec<RawBytes2>,
-    }
-    let input = r#"data 42"#;
-    let result = serde_kdl::from_str::<S>(input);
-    assert!(result.is_err());
-}
-
-#[test]
-fn value_deserializer_byte_buf_via_seq() {
-    // Exercise ValueDeserializer::deserialize_byte_buf
-    #[derive(Debug, PartialEq)]
-    struct OwnedRawBytes(Vec<u8>);
-
-    impl<'de> Deserialize<'de> for OwnedRawBytes {
-        fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
-            struct V;
-            impl<'de> serde::de::Visitor<'de> for V {
-                type Value = OwnedRawBytes;
-                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    write!(f, "bytes")
-                }
-                fn visit_bytes<E>(self, v: &[u8]) -> Result<OwnedRawBytes, E> {
-                    Ok(OwnedRawBytes(v.to_vec()))
-                }
-            }
-            de.deserialize_byte_buf(V)
-        }
-    }
-
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        data: Vec<OwnedRawBytes>,
-    }
-    let input = r#"data "hello""#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.data, vec![OwnedRawBytes(b"hello".to_vec())]);
-}
-
-#[test]
-fn value_deserializer_unit_null_in_args() {
-    // A multi-arg node with null values deserialized as Vec<()>.
-    // Each null arg goes through ValueDeserializer::deserialize_unit.
-    let input = r#"vals #null #null"#;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        vals: Vec<()>,
-    }
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.vals, vec![(), ()]);
-}
-
-#[test]
-fn value_deserializer_unit_mismatch_in_args() {
-    // Non-null value deserialized as unit → error
-    let input = r#"vals 42"#;
-    #[derive(Deserialize, Debug)]
-    struct S {
-        vals: Vec<()>,
-    }
-    let result = serde_kdl::from_str::<S>(input);
-    assert!(result.is_err());
-}
-
-#[test]
-fn value_deserializer_unit_struct_in_args() {
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct Marker;
-    #[derive(Deserialize, Debug, PartialEq)]
-    struct S {
-        vals: Vec<Marker>,
-    }
-    let input = r#"vals #null #null"#;
-    let val: S = serde_kdl::from_str(input).unwrap();
-    assert_eq!(val.vals, vec![Marker, Marker]);
 }
