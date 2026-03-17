@@ -2802,3 +2802,390 @@ shape {
     let result = serde_kdl::from_str::<S>(input);
     assert!(result.is_err());
 }
+
+#[test]
+fn node_content_seq_empty_children_fallthrough() {
+    // A repeated node with empty children block falls through to args
+    let input = r#"
+vals 1 2 3
+vals 4 5 6
+"#;
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        vals: Vec<Vec<i32>>,
+    }
+    let val: S = serde_kdl::from_str(input).unwrap();
+    assert_eq!(val.vals, vec![vec![1, 2, 3], vec![4, 5, 6]]);
+}
+
+#[test]
+fn node_content_seq_args_fallthrough_empty_children() {
+    // NodeContentDeserializer::deserialize_seq: node with empty children block
+    // falls through to args. Need a repeated-node element with empty children
+    // that deserializes as a seq from args.
+    let input = "vals {\n}\nvals {\n}\n";
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        vals: Vec<Vec<i32>>,
+    }
+    let val: S = serde_kdl::from_str(input).unwrap();
+    assert_eq!(val.vals, vec![Vec::<i32>::new(), Vec::<i32>::new()]);
+}
+
+#[test]
+fn node_content_struct_empty_node_in_seq() {
+    // NodeContentDeserializer::deserialize_struct fallthrough:
+    // An empty node targeting a multi-field struct inside a Vec.
+    #[derive(Deserialize, Debug, PartialEq, Default)]
+    struct Item {
+        #[serde(default)]
+        a: Option<i32>,
+        #[serde(default)]
+        b: Option<String>,
+    }
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        item: Vec<Item>,
+    }
+    let input = "item\nitem\n";
+    let val: S = serde_kdl::from_str(input).unwrap();
+    assert_eq!(
+        val.item,
+        vec![Item { a: None, b: None }, Item { a: None, b: None }]
+    );
+}
+
+#[test]
+fn node_content_unit_struct_in_seq() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct Marker;
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        tag: Vec<Marker>,
+    }
+    let input = "tag\ntag\n";
+    let val: S = serde_kdl::from_str(input).unwrap();
+    assert_eq!(val.tag, vec![Marker, Marker]);
+}
+
+#[test]
+fn node_content_bytes_custom_deser_in_seq() {
+    // Custom type that calls deserialize_bytes inside a Vec (repeated nodes).
+    // This exercises NodeContentDeserializer::deserialize_bytes.
+    #[derive(Debug, PartialEq)]
+    struct ByteData(Vec<u8>);
+
+    impl<'de> Deserialize<'de> for ByteData {
+        fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+            struct V;
+            impl<'de> serde::de::Visitor<'de> for V {
+                type Value = ByteData;
+                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    write!(f, "byte data")
+                }
+                fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                    self,
+                    mut seq: A,
+                ) -> Result<ByteData, A::Error> {
+                    let mut bytes = Vec::new();
+                    while let Some(b) = seq.next_element()? {
+                        bytes.push(b);
+                    }
+                    Ok(ByteData(bytes))
+                }
+            }
+            de.deserialize_bytes(V)
+        }
+    }
+
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        data: Vec<ByteData>,
+    }
+    let input = "data 1 2 3\ndata 4 5\n";
+    let val: S = serde_kdl::from_str(input).unwrap();
+    assert_eq!(
+        val.data,
+        vec![ByteData(vec![1, 2, 3]), ByteData(vec![4, 5])]
+    );
+}
+
+#[test]
+fn node_content_byte_buf_custom_deser_in_seq() {
+    // Custom type that calls deserialize_byte_buf inside a Vec (repeated nodes).
+    #[derive(Debug, PartialEq)]
+    struct ByteBufData(Vec<u8>);
+
+    impl<'de> Deserialize<'de> for ByteBufData {
+        fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+            struct V;
+            impl<'de> serde::de::Visitor<'de> for V {
+                type Value = ByteBufData;
+                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    write!(f, "byte buf data")
+                }
+                fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                    self,
+                    mut seq: A,
+                ) -> Result<ByteBufData, A::Error> {
+                    let mut bytes = Vec::new();
+                    while let Some(b) = seq.next_element()? {
+                        bytes.push(b);
+                    }
+                    Ok(ByteBufData(bytes))
+                }
+            }
+            de.deserialize_byte_buf(V)
+        }
+    }
+
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        data: Vec<ByteBufData>,
+    }
+    let input = "data 1 2 3\ndata 4 5\n";
+    let val: S = serde_kdl::from_str(input).unwrap();
+    assert_eq!(
+        val.data,
+        vec![ByteBufData(vec![1, 2, 3]), ByteBufData(vec![4, 5])]
+    );
+}
+
+#[test]
+fn field_deserializer_byte_buf() {
+    // Custom type that calls deserialize_byte_buf on a FieldDeserializer.
+    #[derive(Debug, PartialEq)]
+    struct OwnedBytes(Vec<u8>);
+
+    impl<'de> Deserialize<'de> for OwnedBytes {
+        fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+            struct V;
+            impl<'de> serde::de::Visitor<'de> for V {
+                type Value = OwnedBytes;
+                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    write!(f, "owned bytes")
+                }
+                fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                    self,
+                    mut seq: A,
+                ) -> Result<OwnedBytes, A::Error> {
+                    let mut bytes = Vec::new();
+                    while let Some(b) = seq.next_element()? {
+                        bytes.push(b);
+                    }
+                    Ok(OwnedBytes(bytes))
+                }
+            }
+            de.deserialize_byte_buf(V)
+        }
+    }
+
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        data: OwnedBytes,
+    }
+    let input = "data 1 2 3";
+    let val: S = serde_kdl::from_str(input).unwrap();
+    assert_eq!(val.data, OwnedBytes(vec![1, 2, 3]));
+}
+
+#[test]
+fn field_deserializer_str() {
+    // Custom type that calls deserialize_str on a FieldDeserializer.
+    #[derive(Debug, PartialEq)]
+    struct BorrowStr(String);
+
+    impl<'de> Deserialize<'de> for BorrowStr {
+        fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+            struct V;
+            impl<'de> serde::de::Visitor<'de> for V {
+                type Value = BorrowStr;
+                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    write!(f, "a string")
+                }
+                fn visit_str<E>(self, v: &str) -> Result<BorrowStr, E> {
+                    Ok(BorrowStr(v.to_string()))
+                }
+            }
+            de.deserialize_str(V)
+        }
+    }
+
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        name: BorrowStr,
+    }
+    let input = r#"name "hello""#;
+    let val: S = serde_kdl::from_str(input).unwrap();
+    assert_eq!(val.name, BorrowStr("hello".into()));
+}
+
+#[test]
+fn node_content_str_custom_deser_in_seq() {
+    // Custom type calling deserialize_str inside a Vec (repeated nodes).
+    #[derive(Debug, PartialEq)]
+    struct BorrowStr2(String);
+
+    impl<'de> Deserialize<'de> for BorrowStr2 {
+        fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+            struct V;
+            impl<'de> serde::de::Visitor<'de> for V {
+                type Value = BorrowStr2;
+                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    write!(f, "a string")
+                }
+                fn visit_str<E>(self, v: &str) -> Result<BorrowStr2, E> {
+                    Ok(BorrowStr2(v.to_string()))
+                }
+            }
+            de.deserialize_str(V)
+        }
+    }
+
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        name: Vec<BorrowStr2>,
+    }
+    let input = "name \"hello\"\nname \"world\"\n";
+    let val: S = serde_kdl::from_str(input).unwrap();
+    assert_eq!(
+        val.name,
+        vec![BorrowStr2("hello".into()), BorrowStr2("world".into())]
+    );
+}
+
+#[test]
+fn value_deserializer_bytes_from_string_seq() {
+    // Custom type that calls deserialize_bytes on a ValueDeserializer
+    // (reached via ArgsSeqAccess from a multi-arg node).
+    #[derive(Debug, PartialEq)]
+    struct RawBytes(Vec<u8>);
+
+    impl<'de> Deserialize<'de> for RawBytes {
+        fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+            struct V;
+            impl<'de> serde::de::Visitor<'de> for V {
+                type Value = RawBytes;
+                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    write!(f, "bytes")
+                }
+                fn visit_bytes<E>(self, v: &[u8]) -> Result<RawBytes, E> {
+                    Ok(RawBytes(v.to_vec()))
+                }
+            }
+            de.deserialize_bytes(V)
+        }
+    }
+
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        data: Vec<RawBytes>,
+    }
+    let input = r#"data "hello" "world""#;
+    let val: S = serde_kdl::from_str(input).unwrap();
+    assert_eq!(
+        val.data,
+        vec![RawBytes(b"hello".to_vec()), RawBytes(b"world".to_vec())]
+    );
+}
+
+#[test]
+fn value_deserializer_bytes_type_mismatch_via_seq() {
+    // Exercise the error path in ValueDeserializer::deserialize_bytes
+    // when a non-string value is encountered.
+    #[derive(Debug)]
+    struct RawBytes2(Vec<u8>);
+
+    impl<'de> Deserialize<'de> for RawBytes2 {
+        fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+            struct V;
+            impl<'de> serde::de::Visitor<'de> for V {
+                type Value = RawBytes2;
+                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    write!(f, "bytes")
+                }
+                fn visit_bytes<E>(self, v: &[u8]) -> Result<RawBytes2, E> {
+                    Ok(RawBytes2(v.to_vec()))
+                }
+            }
+            de.deserialize_bytes(V)
+        }
+    }
+
+    #[derive(Deserialize, Debug)]
+    struct S {
+        data: Vec<RawBytes2>,
+    }
+    let input = r#"data 42"#;
+    let result = serde_kdl::from_str::<S>(input);
+    assert!(result.is_err());
+}
+
+#[test]
+fn value_deserializer_byte_buf_via_seq() {
+    // Exercise ValueDeserializer::deserialize_byte_buf
+    #[derive(Debug, PartialEq)]
+    struct OwnedRawBytes(Vec<u8>);
+
+    impl<'de> Deserialize<'de> for OwnedRawBytes {
+        fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+            struct V;
+            impl<'de> serde::de::Visitor<'de> for V {
+                type Value = OwnedRawBytes;
+                fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    write!(f, "bytes")
+                }
+                fn visit_bytes<E>(self, v: &[u8]) -> Result<OwnedRawBytes, E> {
+                    Ok(OwnedRawBytes(v.to_vec()))
+                }
+            }
+            de.deserialize_byte_buf(V)
+        }
+    }
+
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        data: Vec<OwnedRawBytes>,
+    }
+    let input = r#"data "hello""#;
+    let val: S = serde_kdl::from_str(input).unwrap();
+    assert_eq!(val.data, vec![OwnedRawBytes(b"hello".to_vec())]);
+}
+
+#[test]
+fn value_deserializer_unit_null_in_args() {
+    // A multi-arg node with null values deserialized as Vec<()>.
+    // Each null arg goes through ValueDeserializer::deserialize_unit.
+    let input = r#"vals #null #null"#;
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        vals: Vec<()>,
+    }
+    let val: S = serde_kdl::from_str(input).unwrap();
+    assert_eq!(val.vals, vec![(), ()]);
+}
+
+#[test]
+fn value_deserializer_unit_mismatch_in_args() {
+    // Non-null value deserialized as unit → error
+    let input = r#"vals 42"#;
+    #[derive(Deserialize, Debug)]
+    struct S {
+        vals: Vec<()>,
+    }
+    let result = serde_kdl::from_str::<S>(input);
+    assert!(result.is_err());
+}
+
+#[test]
+fn value_deserializer_unit_struct_in_args() {
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct Marker;
+    #[derive(Deserialize, Debug, PartialEq)]
+    struct S {
+        vals: Vec<Marker>,
+    }
+    let input = r#"vals #null #null"#;
+    let val: S = serde_kdl::from_str(input).unwrap();
+    assert_eq!(val.vals, vec![Marker, Marker]);
+}

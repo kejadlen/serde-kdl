@@ -48,9 +48,8 @@ impl<'de, 'a> de::Deserializer<'de> for DocumentDeserializer<'a> {
     type Error = Error;
 
     fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        // cov-excl-line
-        self.deserialize_map(visitor) // cov-excl-line
-    } // cov-excl-line
+        self.deserialize_map(visitor)
+    }
 
     fn deserialize_struct<V: Visitor<'de>>(
         self,
@@ -89,9 +88,7 @@ impl<'de, 'a> de::Deserializer<'de> for DocumentDeserializer<'a> {
     fn deserialize_ignored_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         visitor.visit_unit()
     }
-    // cov-excl-stop
 
-    // cov-excl-start
     serde::forward_to_deserialize_any! {
         bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64
         char str string bytes byte_buf option
@@ -290,13 +287,9 @@ impl<'de, 'a> de::Deserializer<'de> for FieldDeserializer<'a> {
         ValueDeserializer::new(self.first_arg()?).deserialize_char(visitor)
     }
 
-    // cov-excl-start — serde calls deserialize_string for String fields,
-    // never deserialize_str. Only &str deserialization (borrowing from input)
-    // would call this, which we don't support.
     fn deserialize_str<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         ValueDeserializer::new(self.first_arg()?).deserialize_str(visitor)
     }
-    // cov-excl-stop
 
     fn deserialize_string<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         ValueDeserializer::new(self.first_arg()?).deserialize_string(visitor)
@@ -306,13 +299,9 @@ impl<'de, 'a> de::Deserializer<'de> for FieldDeserializer<'a> {
         self.deserialize_seq(visitor)
     }
 
-    // cov-excl-start — serde calls deserialize_bytes for serde_bytes types;
-    // deserialize_byte_buf is only called by types requesting owned byte
-    // buffers, which route through deserialize_bytes in practice.
     fn deserialize_byte_buf<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         self.deserialize_seq(visitor)
     }
-    // cov-excl-stop
 
     fn deserialize_option<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         // If we got here, the node exists, so it's Some.
@@ -501,17 +490,16 @@ impl<'de, 'a> de::Deserializer<'de> for FieldDeserializer<'a> {
         )))
     }
 
-    // cov-excl-start — serde calls deserialize_identifier only for map keys
-    // and enum variant names, which are handled by MapAccess/EnumAccess
-    // implementations rather than through FieldDeserializer.
+    // cov-excl-start — serde calls deserialize_identifier for map keys
+    // via IntoDeserializer in MapAccess, not through FieldDeserializer.
     fn deserialize_identifier<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         self.deserialize_str(visitor)
     }
+    // cov-excl-stop
 
     fn deserialize_ignored_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         visitor.visit_unit()
     }
-    // cov-excl-stop
 }
 
 // ---------------------------------------------------------------------------
@@ -725,21 +713,14 @@ impl<'de, 'a> de::Deserializer<'de> for NodeContentDeserializer<'a> {
         ValueDeserializer::new(first_arg_of(self.node)?).deserialize_char(visitor)
     }
 
-    // cov-excl-start — serde calls deserialize_string for String fields,
-    // never deserialize_str. Only &str (borrowing from input) uses this.
     fn deserialize_str<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         ValueDeserializer::new(first_arg_of(self.node)?).deserialize_str(visitor)
     }
-    // cov-excl-stop
 
     fn deserialize_string<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         ValueDeserializer::new(first_arg_of(self.node)?).deserialize_string(visitor)
     }
 
-    // cov-excl-start — serde's Vec<u8> calls deserialize_u8 per element
-    // via SeqAccess, not deserialize_bytes. Only custom serde_bytes-style
-    // impls call deserialize_bytes/byte_buf, and those route through
-    // FieldDeserializer (not NodeContentDeserializer) for top-level fields.
     fn deserialize_bytes<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         self.deserialize_seq(visitor)
     }
@@ -747,7 +728,6 @@ impl<'de, 'a> de::Deserializer<'de> for NodeContentDeserializer<'a> {
     fn deserialize_byte_buf<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         self.deserialize_seq(visitor)
     }
-    // cov-excl-stop
 
     fn deserialize_option<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         let args = node_args(self.node);
@@ -762,9 +742,6 @@ impl<'de, 'a> de::Deserializer<'de> for NodeContentDeserializer<'a> {
         visitor.visit_unit()
     }
 
-    // cov-excl-start — unit structs in repeated-node sequences use
-    // deserialize_unit (above), not deserialize_unit_struct, because
-    // serde's visitor delegates to the simpler method.
     fn deserialize_unit_struct<V: Visitor<'de>>(
         self,
         _name: &'static str,
@@ -772,7 +749,6 @@ impl<'de, 'a> de::Deserializer<'de> for NodeContentDeserializer<'a> {
     ) -> Result<V::Value> {
         visitor.visit_unit()
     }
-    // cov-excl-stop
 
     fn deserialize_newtype_struct<V: Visitor<'de>>(
         self,
@@ -803,12 +779,10 @@ impl<'de, 'a> de::Deserializer<'de> for NodeContentDeserializer<'a> {
                     nodes: child_nodes,
                     index: 0,
                 });
-            } // cov-excl-line — empty children block, falls through to args
-            // cov-excl-start
+            }
         }
         let args = node_args(self.node);
         visitor.visit_seq(ArgsSeqAccess { args, index: 0 })
-        // cov-excl-stop
     }
 
     fn deserialize_tuple<V: Visitor<'de>>(self, _len: usize, visitor: V) -> Result<V::Value> {
@@ -853,23 +827,13 @@ impl<'de, 'a> de::Deserializer<'de> for NodeContentDeserializer<'a> {
                 value: args[0],
                 done: false,
             });
-        } // cov-excl-line
-        // cov-excl-start — reached only when a repeated-node element has
-        // no children, no properties, and doesn't match the single-arg
-        // struct pattern. Requires an empty node targeting a multi-field
-        // struct inside a Vec, which produces an empty struct.
+        }
         visitor.visit_map(PropsMapAccess {
             props: vec![],
             index: 0,
         })
-        // cov-excl-stop
     }
 
-    // cov-excl-start — enum deserialization on NodeContentDeserializer is
-    // exercised through typed paths (node_content_enum_in_seq,
-    // node_content_complex_enum_in_seq). The remaining branches here
-    // (complex variant, error) mirror FieldDeserializer::deserialize_enum
-    // which is fully covered.
     fn deserialize_enum<V: Visitor<'de>>(
         self,
         _name: &'static str,
@@ -890,6 +854,10 @@ impl<'de, 'a> de::Deserializer<'de> for NodeContentDeserializer<'a> {
             });
         }
 
+        // cov-excl-start — complex variant through NodeContentDeserializer
+        // requires a repeated-node element with a single child node naming
+        // a variant. The FieldDeserializer path handles this for top-level
+        // fields; this branch mirrors it for completeness.
         // Complex variant: child node named after variant
         if let Some(children) = self.node.children() {
             let child_nodes = children.nodes();
@@ -974,7 +942,7 @@ impl<'de, 'a> de::Deserializer<'de> for ValueDeserializer<'a> {
             // (used by #[serde(untagged)]), so the Integer branch can't
             // be reached through untagged enums. The Float branch has the
             // same limitation via visit_f64 with serde Content.
-            KdlValue::Integer(i) => visitor.visit_i128(*i), // cov-excl-line
+            KdlValue::Integer(i) => visitor.visit_i128(*i),
             KdlValue::Float(f) => visitor.visit_f64(*f),
             KdlValue::Bool(b) => visitor.visit_bool(*b),
             KdlValue::Null => visitor.visit_none(), // cov-excl-line
@@ -1042,10 +1010,6 @@ impl<'de, 'a> de::Deserializer<'de> for ValueDeserializer<'a> {
         self.deserialize_str(visitor)
     }
 
-    // cov-excl-start — ValueDeserializer::deserialize_bytes is only reached
-    // when a custom Deserialize impl calls deserialize_bytes on a scalar
-    // KDL value. FieldDeserializer and NodeContentDeserializer intercept
-    // bytes deserialization and delegate to deserialize_seq instead.
     fn deserialize_bytes<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         match self.value {
             KdlValue::String(s) => visitor.visit_bytes(s.as_bytes()),
@@ -1059,7 +1023,6 @@ impl<'de, 'a> de::Deserializer<'de> for ValueDeserializer<'a> {
     fn deserialize_byte_buf<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         self.deserialize_bytes(visitor)
     }
-    // cov-excl-stop
 
     fn deserialize_option<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         if self.value.is_null() {
@@ -1069,10 +1032,6 @@ impl<'de, 'a> de::Deserializer<'de> for ValueDeserializer<'a> {
         }
     }
 
-    // cov-excl-start — FieldDeserializer/NodeContentDeserializer handle
-    // unit deserialization directly (visit_unit), so serde never routes
-    // unit/unit_struct through ValueDeserializer. These error paths exist
-    // for completeness but aren't reachable through the public API.
     fn deserialize_unit<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         if self.value.is_null() {
             visitor.visit_unit()
@@ -1091,7 +1050,6 @@ impl<'de, 'a> de::Deserializer<'de> for ValueDeserializer<'a> {
     ) -> Result<V::Value> {
         self.deserialize_unit(visitor)
     }
-    // cov-excl-stop
 
     fn deserialize_newtype_struct<V: Visitor<'de>>(
         self,
