@@ -1,6 +1,6 @@
 use std::fmt;
 
-/// Error type for serde-kdl serialization and deserialization.
+/// Error type for serde-kdl2 serialization and deserialization.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// A KDL parsing error.

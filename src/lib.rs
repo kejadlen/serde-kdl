@@ -1,4 +1,4 @@
-//! # serde-kdl
+//! # serde-kdl2
 //!
 //! [Serde](https://serde.rs) integration for [KDL](https://kdl.dev), the
 //! KDL Document Language.
@@ -25,14 +25,14 @@
 //! "#;
 //!
 //! // Deserialize
-//! let config: Config = serde_kdl::from_str(kdl_input).unwrap();
+//! let config: Config = serde_kdl2::from_str(kdl_input).unwrap();
 //! assert_eq!(config.title, "My App");
 //! assert_eq!(config.count, 42);
 //! assert_eq!(config.enabled, true);
 //!
 //! // Serialize
-//! let output = serde_kdl::to_string(&config).unwrap();
-//! let roundtrip: Config = serde_kdl::from_str(&output).unwrap();
+//! let output = serde_kdl2::to_string(&config).unwrap();
+//! let roundtrip: Config = serde_kdl2::from_str(&output).unwrap();
 //! assert_eq!(config, roundtrip);
 //! ```
 //!

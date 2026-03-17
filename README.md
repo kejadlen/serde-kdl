@@ -1,4 +1,4 @@
-# serde-kdl
+# serde-kdl2
 
 [Serde](https://serde.rs) integration for [KDL](https://kdl.dev) (KDL Document Language).
 
@@ -23,13 +23,13 @@ enabled #true
 "#;
 
 // Deserialize
-let config: Config = serde_kdl::from_str(kdl_input).unwrap();
+let config: Config = serde_kdl2::from_str(kdl_input).unwrap();
 
 // Serialize
-let output = serde_kdl::to_string(&config).unwrap();
+let output = serde_kdl2::to_string(&config).unwrap();
 
 // Roundtrip
-let roundtrip: Config = serde_kdl::from_str(&output).unwrap();
+let roundtrip: Config = serde_kdl2::from_str(&output).unwrap();
 assert_eq!(config, roundtrip);
 ```
 
@@ -146,19 +146,19 @@ settings {
 
 ```rust
 // Deserialize from string
-let config: Config = serde_kdl::from_str(kdl_str)?;
+let config: Config = serde_kdl2::from_str(kdl_str)?;
 
 // Deserialize from KdlDocument
-let config: Config = serde_kdl::from_doc(&doc)?;
+let config: Config = serde_kdl2::from_doc(&doc)?;
 
 // Serialize to string
-let s: String = serde_kdl::to_string(&config)?;
+let s: String = serde_kdl2::to_string(&config)?;
 
 // Serialize to string (auto-formatted)
-let s: String = serde_kdl::to_string_pretty(&config)?;
+let s: String = serde_kdl2::to_string_pretty(&config)?;
 
 // Serialize to KdlDocument
-let doc: kdl::KdlDocument = serde_kdl::to_doc(&config)?;
+let doc: kdl::KdlDocument = serde_kdl2::to_doc(&config)?;
 ```
 
 ## License

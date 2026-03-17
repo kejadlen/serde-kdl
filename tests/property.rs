@@ -39,8 +39,8 @@ fn flat_struct_strategy() -> impl Strategy<Value = FlatStruct> {
 proptest! {
     #[test]
     fn flat_struct_roundtrip(val in flat_struct_strategy()) {
-        let serialized = serde_kdl::to_string(&val).unwrap();
-        let deserialized: FlatStruct = serde_kdl::from_str(&serialized).unwrap();
+        let serialized = serde_kdl2::to_string(&val).unwrap();
+        let deserialized: FlatStruct = serde_kdl2::from_str(&serialized).unwrap();
         prop_assert_eq!(val, deserialized);
     }
 }
@@ -69,8 +69,8 @@ fn outer_strategy() -> impl Strategy<Value = Outer> {
 proptest! {
     #[test]
     fn nested_struct_roundtrip(val in outer_strategy()) {
-        let serialized = serde_kdl::to_string(&val).unwrap();
-        let deserialized: Outer = serde_kdl::from_str(&serialized).unwrap();
+        let serialized = serde_kdl2::to_string(&val).unwrap();
+        let deserialized: Outer = serde_kdl2::from_str(&serialized).unwrap();
         prop_assert_eq!(val, deserialized);
     }
 }
@@ -94,8 +94,8 @@ fn with_vec_strings_strategy() -> impl Strategy<Value = WithVecStrings> {
 proptest! {
     #[test]
     fn vec_strings_roundtrip(val in with_vec_strings_strategy()) {
-        let serialized = serde_kdl::to_string(&val).unwrap();
-        let deserialized: WithVecStrings = serde_kdl::from_str(&serialized).unwrap();
+        let serialized = serde_kdl2::to_string(&val).unwrap();
+        let deserialized: WithVecStrings = serde_kdl2::from_str(&serialized).unwrap();
         prop_assert_eq!(val, deserialized);
     }
 }
@@ -117,8 +117,8 @@ fn with_vec_ints_strategy() -> impl Strategy<Value = WithVecInts> {
 proptest! {
     #[test]
     fn vec_ints_roundtrip(val in with_vec_ints_strategy()) {
-        let serialized = serde_kdl::to_string(&val).unwrap();
-        let deserialized: WithVecInts = serde_kdl::from_str(&serialized).unwrap();
+        let serialized = serde_kdl2::to_string(&val).unwrap();
+        let deserialized: WithVecInts = serde_kdl2::from_str(&serialized).unwrap();
         prop_assert_eq!(val, deserialized);
     }
 }
@@ -151,8 +151,8 @@ fn with_items_strategy() -> impl Strategy<Value = WithItems> {
 proptest! {
     #[test]
     fn vec_structs_roundtrip(val in with_items_strategy()) {
-        let serialized = serde_kdl::to_string(&val).unwrap();
-        let deserialized: WithItems = serde_kdl::from_str(&serialized).unwrap();
+        let serialized = serde_kdl2::to_string(&val).unwrap();
+        let deserialized: WithItems = serde_kdl2::from_str(&serialized).unwrap();
         prop_assert_eq!(val, deserialized);
     }
 }
@@ -188,8 +188,8 @@ fn with_options_strategy() -> impl Strategy<Value = WithOptions> {
 proptest! {
     #[test]
     fn option_fields_roundtrip(val in with_options_strategy()) {
-        let serialized = serde_kdl::to_string(&val).unwrap();
-        let deserialized: WithOptions = serde_kdl::from_str(&serialized).unwrap();
+        let serialized = serde_kdl2::to_string(&val).unwrap();
+        let deserialized: WithOptions = serde_kdl2::from_str(&serialized).unwrap();
         prop_assert_eq!(val, deserialized);
     }
 }
@@ -220,8 +220,8 @@ fn with_enum_strategy() -> impl Strategy<Value = WithEnum> {
 proptest! {
     #[test]
     fn unit_enum_roundtrip(val in with_enum_strategy()) {
-        let serialized = serde_kdl::to_string(&val).unwrap();
-        let deserialized: WithEnum = serde_kdl::from_str(&serialized).unwrap();
+        let serialized = serde_kdl2::to_string(&val).unwrap();
+        let deserialized: WithEnum = serde_kdl2::from_str(&serialized).unwrap();
         prop_assert_eq!(val, deserialized);
     }
 }
@@ -256,8 +256,8 @@ fn with_shape_strategy() -> impl Strategy<Value = WithShape> {
 proptest! {
     #[test]
     fn complex_enum_roundtrip(val in with_shape_strategy()) {
-        let serialized = serde_kdl::to_string(&val).unwrap();
-        let deserialized: WithShape = serde_kdl::from_str(&serialized).unwrap();
+        let serialized = serde_kdl2::to_string(&val).unwrap();
+        let deserialized: WithShape = serde_kdl2::from_str(&serialized).unwrap();
         prop_assert_eq!(val, deserialized);
     }
 }
@@ -286,8 +286,8 @@ fn with_map_strategy() -> impl Strategy<Value = WithMap> {
 proptest! {
     #[test]
     fn btreemap_roundtrip(val in with_map_strategy()) {
-        let serialized = serde_kdl::to_string(&val).unwrap();
-        let deserialized: WithMap = serde_kdl::from_str(&serialized).unwrap();
+        let serialized = serde_kdl2::to_string(&val).unwrap();
+        let deserialized: WithMap = serde_kdl2::from_str(&serialized).unwrap();
         prop_assert_eq!(val, deserialized);
     }
 }
@@ -319,8 +319,8 @@ proptest! {
         h in any::<u64>(),
     ) {
         let val = IntegerTypes { a, b, c, d, e, f, g, h };
-        let serialized = serde_kdl::to_string(&val).unwrap();
-        let deserialized: IntegerTypes = serde_kdl::from_str(&serialized).unwrap();
+        let serialized = serde_kdl2::to_string(&val).unwrap();
+        let deserialized: IntegerTypes = serde_kdl2::from_str(&serialized).unwrap();
         prop_assert_eq!(val, deserialized);
     }
 }
@@ -338,8 +338,8 @@ proptest! {
     #[test]
     fn bool_roundtrip(a in any::<bool>(), b in any::<bool>(), c in any::<bool>()) {
         let val = Flags { a, b, c };
-        let serialized = serde_kdl::to_string(&val).unwrap();
-        let deserialized: Flags = serde_kdl::from_str(&serialized).unwrap();
+        let serialized = serde_kdl2::to_string(&val).unwrap();
+        let deserialized: Flags = serde_kdl2::from_str(&serialized).unwrap();
         prop_assert_eq!(val, deserialized);
     }
 }
@@ -356,8 +356,8 @@ proptest! {
     #[test]
     fn tuple_roundtrip(label in kdl_safe_string(), a in any::<i32>(), b in any::<i32>()) {
         let val = WithTuple { label, pair: (a, b) };
-        let serialized = serde_kdl::to_string(&val).unwrap();
-        let deserialized: WithTuple = serde_kdl::from_str(&serialized).unwrap();
+        let serialized = serde_kdl2::to_string(&val).unwrap();
+        let deserialized: WithTuple = serde_kdl2::from_str(&serialized).unwrap();
         prop_assert_eq!(val, deserialized);
     }
 }
@@ -395,8 +395,8 @@ proptest! {
                 level3: Level3 { value },
             },
         };
-        let serialized = serde_kdl::to_string(&val).unwrap();
-        let deserialized: Level1 = serde_kdl::from_str(&serialized).unwrap();
+        let serialized = serde_kdl2::to_string(&val).unwrap();
+        let deserialized: Level1 = serde_kdl2::from_str(&serialized).unwrap();
         prop_assert_eq!(val, deserialized);
     }
 }
@@ -437,8 +437,8 @@ fn kitchen_sink_strategy() -> impl Strategy<Value = KitchenSink> {
 proptest! {
     #[test]
     fn kitchen_sink_roundtrip(val in kitchen_sink_strategy()) {
-        let serialized = serde_kdl::to_string(&val).unwrap();
-        let deserialized: KitchenSink = serde_kdl::from_str(&serialized).unwrap();
+        let serialized = serde_kdl2::to_string(&val).unwrap();
+        let deserialized: KitchenSink = serde_kdl2::from_str(&serialized).unwrap();
         prop_assert_eq!(val, deserialized);
     }
 }
@@ -448,8 +448,8 @@ proptest! {
 proptest! {
     #[test]
     fn pretty_print_roundtrip(val in flat_struct_strategy()) {
-        let serialized = serde_kdl::to_string_pretty(&val).unwrap();
-        let deserialized: FlatStruct = serde_kdl::from_str(&serialized).unwrap();
+        let serialized = serde_kdl2::to_string_pretty(&val).unwrap();
+        let deserialized: FlatStruct = serde_kdl2::from_str(&serialized).unwrap();
         prop_assert_eq!(val, deserialized);
     }
 }
@@ -479,8 +479,8 @@ proptest! {
     #[test]
     fn newtype_enum_roundtrip(label in kdl_safe_string(), wrapped in wrapper_strategy()) {
         let val = WithNewtype { label, wrapped };
-        let serialized = serde_kdl::to_string(&val).unwrap();
-        let deserialized: WithNewtype = serde_kdl::from_str(&serialized).unwrap();
+        let serialized = serde_kdl2::to_string(&val).unwrap();
+        let deserialized: WithNewtype = serde_kdl2::from_str(&serialized).unwrap();
         prop_assert_eq!(val, deserialized);
     }
 }

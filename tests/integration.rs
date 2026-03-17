@@ -10,7 +10,7 @@ macro_rules! deser_ok {
     ($name:ident, $ty:ty, $input:expr, $expected:expr) => {
         #[test]
         fn $name() {
-            let val: $ty = serde_kdl::from_str($input).unwrap();
+            let val: $ty = serde_kdl2::from_str($input).unwrap();
             assert_eq!(val, $expected);
         }
     };
@@ -21,7 +21,7 @@ macro_rules! deser_err {
     ($name:ident, $ty:ty, $input:expr) => {
         #[test]
         fn $name() {
-            assert!(serde_kdl::from_str::<$ty>($input).is_err());
+            assert!(serde_kdl2::from_str::<$ty>($input).is_err());
         }
     };
 }
@@ -32,8 +32,8 @@ macro_rules! roundtrip {
         #[test]
         fn $name() {
             let val: $ty = $val;
-            let output = serde_kdl::to_string(&val).unwrap();
-            let rt: $ty = serde_kdl::from_str(&output).unwrap();
+            let output = serde_kdl2::to_string(&val).unwrap();
+            let rt: $ty = serde_kdl2::from_str(&output).unwrap();
             assert_eq!(val, rt);
         }
     };
@@ -44,7 +44,7 @@ macro_rules! ser_err {
     ($name:ident, $val:expr) => {
         #[test]
         fn $name() {
-            assert!(serde_kdl::to_string(&$val).is_err());
+            assert!(serde_kdl2::to_string(&$val).is_err());
         }
     };
 }
@@ -59,7 +59,7 @@ macro_rules! deser_repeated_vec {
             struct W {
                 $field: Vec<$ty>,
             }
-            let val: W = serde_kdl::from_str($input).unwrap();
+            let val: W = serde_kdl2::from_str($input).unwrap();
             assert_eq!(val.$field, $expected);
         }
     };
@@ -74,7 +74,7 @@ macro_rules! deser_repeated_vec_err {
             struct W {
                 $field: Vec<$ty>,
             }
-            assert!(serde_kdl::from_str::<W>($input).is_err());
+            assert!(serde_kdl2::from_str::<W>($input).is_err());
         }
     };
 }
@@ -88,7 +88,7 @@ macro_rules! deser_field {
             struct W {
                 $field: $ty,
             }
-            let val: W = serde_kdl::from_str($input).unwrap();
+            let val: W = serde_kdl2::from_str($input).unwrap();
             assert_eq!(val.$field, $expected);
         }
     };
@@ -104,7 +104,7 @@ macro_rules! deser_field_err {
                 #[allow(dead_code)]
                 $field: $ty,
             }
-            assert!(serde_kdl::from_str::<W>($input).is_err());
+            assert!(serde_kdl2::from_str::<W>($input).is_err());
         }
     };
 }
@@ -329,18 +329,18 @@ fn serialize_option() {
         required: String::from("hello"),
         optional: Some(String::from("world")),
     };
-    let output = serde_kdl::to_string(&with).unwrap();
+    let output = serde_kdl2::to_string(&with).unwrap();
     assert!(output.contains("optional"));
-    let rt: OptionalFields = serde_kdl::from_str(&output).unwrap();
+    let rt: OptionalFields = serde_kdl2::from_str(&output).unwrap();
     assert_eq!(with, rt);
 
     let without = OptionalFields {
         required: String::from("hello"),
         optional: None,
     };
-    let output = serde_kdl::to_string(&without).unwrap();
+    let output = serde_kdl2::to_string(&without).unwrap();
     assert!(!output.contains("optional"));
-    let rt: OptionalFields = serde_kdl::from_str(&output).unwrap();
+    let rt: OptionalFields = serde_kdl2::from_str(&output).unwrap();
     assert_eq!(without, rt);
 }
 
@@ -435,7 +435,7 @@ struct WithMap {
 #[test]
 fn deserialize_hashmap() {
     let val: WithMap =
-        serde_kdl::from_str("settings {\n    key1 \"value1\"\n    key2 \"value2\"\n}\n").unwrap();
+        serde_kdl2::from_str("settings {\n    key1 \"value1\"\n    key2 \"value2\"\n}\n").unwrap();
     assert_eq!(val.settings.get("key1"), Some(&"value1".into()));
     assert_eq!(val.settings.get("key2"), Some(&"value2".into()));
 }
@@ -445,8 +445,8 @@ fn serialize_hashmap() {
     let mut settings = HashMap::new();
     settings.insert("key1".into(), "value1".into());
     let val = WithMap { settings };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let rt: WithMap = serde_kdl::from_str(&output).unwrap();
+    let output = serde_kdl2::to_string(&val).unwrap();
+    let rt: WithMap = serde_kdl2::from_str(&output).unwrap();
     assert_eq!(val, rt);
 }
 
@@ -492,8 +492,8 @@ fn roundtrip_tuple() {
     let val = W {
         point: (1.0, 2.0, 3.0),
     };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let rt: W = serde_kdl::from_str(&output).unwrap();
+    let output = serde_kdl2::to_string(&val).unwrap();
+    let rt: W = serde_kdl2::from_str(&output).unwrap();
     assert_eq!(val, rt);
 }
 
@@ -515,10 +515,10 @@ struct Level1 {
 #[test]
 fn deeply_nested() {
     let input = "middle {\n    inner {\n        value \"deep\"\n    }\n}\n";
-    let val: Level1 = serde_kdl::from_str(input).unwrap();
+    let val: Level1 = serde_kdl2::from_str(input).unwrap();
     assert_eq!(val.middle.inner.value, "deep");
-    let output = serde_kdl::to_string(&val).unwrap();
-    let rt: Level1 = serde_kdl::from_str(&output).unwrap();
+    let output = serde_kdl2::to_string(&val).unwrap();
+    let rt: Level1 = serde_kdl2::from_str(&output).unwrap();
     assert_eq!(val, rt);
 }
 
@@ -557,8 +557,8 @@ fn serialize_empty_vec() {
         items: Vec<String>,
     }
     let val = W { items: vec![] };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let rt: W = serde_kdl::from_str(&output).unwrap();
+    let output = serde_kdl2::to_string(&val).unwrap();
+    let rt: W = serde_kdl2::from_str(&output).unwrap();
     assert_eq!(rt.items, Vec::<String>::new());
 }
 
@@ -573,8 +573,8 @@ fn pretty_print() {
             port: 8080,
         },
     };
-    let pretty = serde_kdl::to_string_pretty(&config).unwrap();
-    let rt: AppConfig = serde_kdl::from_str(&pretty).unwrap();
+    let pretty = serde_kdl2::to_string_pretty(&config).unwrap();
+    let rt: AppConfig = serde_kdl2::from_str(&pretty).unwrap();
     assert_eq!(config, rt);
 }
 
@@ -588,9 +588,9 @@ fn doc_api() {
         enabled: false,
         ratio: 0.5,
     };
-    let doc = serde_kdl::to_doc(&config).unwrap();
+    let doc = serde_kdl2::to_doc(&config).unwrap();
     assert!(doc.get("title").is_some());
-    let rt: SimpleConfig = serde_kdl::from_doc(&doc).unwrap();
+    let rt: SimpleConfig = serde_kdl2::from_doc(&doc).unwrap();
     assert_eq!(config, rt);
 }
 
@@ -710,8 +710,8 @@ ser_err!(serialize_top_level_bool_err, true);
 
 #[test]
 fn serialize_top_level_not_struct_error_type() {
-    let err = serde_kdl::to_string(&42i32).unwrap_err();
-    assert!(matches!(err, serde_kdl::Error::TopLevelNotStruct));
+    let err = serde_kdl2::to_string(&42i32).unwrap_err();
+    assert!(matches!(err, serde_kdl2::Error::TopLevelNotStruct));
 }
 
 #[test]
@@ -734,8 +734,8 @@ fn serialize_bytes() {
     let val = W {
         data: vec![1, 2, 3],
     };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let rt: W = serde_kdl::from_str(&output).unwrap();
+    let output = serde_kdl2::to_string(&val).unwrap();
+    let rt: W = serde_kdl2::from_str(&output).unwrap();
     assert_eq!(val, rt);
 }
 
@@ -747,7 +747,7 @@ fn serialize_unit_value() {
         #[allow(dead_code)]
         marker: (),
     }
-    let output = serde_kdl::to_string(&S {
+    let output = serde_kdl2::to_string(&S {
         label: String::from("test"),
         marker: (),
     })
@@ -761,13 +761,13 @@ fn serialize_explicit_null_value() {
     struct S {
         marker: UnitStruct,
     }
-    let output = serde_kdl::to_string(&S { marker: UnitStruct }).unwrap();
+    let output = serde_kdl2::to_string(&S { marker: UnitStruct }).unwrap();
     assert!(!output.contains("marker"));
 }
 
 #[test]
 fn serialize_f32_field() {
-    let output = serde_kdl::to_string(&WF32 { value: 2.5 }).unwrap();
+    let output = serde_kdl2::to_string(&WF32 { value: 2.5 }).unwrap();
     assert!(output.contains("2.5"));
 }
 
@@ -779,7 +779,7 @@ fn serialize_map_integer_keys() {
     }
     let mut lookup = HashMap::new();
     lookup.insert(1, "one".into());
-    let output = serde_kdl::to_string(&S { lookup }).unwrap();
+    let output = serde_kdl2::to_string(&S { lookup }).unwrap();
     assert!(output.contains("1"));
 }
 
@@ -791,7 +791,7 @@ fn serialize_map_bool_keys() {
     }
     let mut flags = HashMap::new();
     flags.insert(true, "yes".into());
-    let output = serde_kdl::to_string(&S { flags }).unwrap();
+    let output = serde_kdl2::to_string(&S { flags }).unwrap();
     assert!(output.contains("true"));
 }
 
@@ -807,7 +807,7 @@ fn serialize_mixed_sequence() {
     struct S {
         items: Vec<V>,
     }
-    let output = serde_kdl::to_string(&S {
+    let output = serde_kdl2::to_string(&S {
         items: vec![V::Num(1), V::Num(2)],
     })
     .unwrap();
@@ -826,7 +826,7 @@ fn serialize_mixed_primitive_sequence() {
     struct S {
         items: Vec<Mixed>,
     }
-    let output = serde_kdl::to_string(&S {
+    let output = serde_kdl2::to_string(&S {
         items: vec![Mixed::Int(1), Mixed::Str("two".into()), Mixed::Int(3)],
     })
     .unwrap();
@@ -839,7 +839,7 @@ fn serialize_nested_sequence() {
     struct S {
         matrix: Vec<Vec<i32>>,
     }
-    let output = serde_kdl::to_string(&S {
+    let output = serde_kdl2::to_string(&S {
         matrix: vec![vec![1, 2], vec![3, 4]],
     })
     .unwrap();
@@ -855,8 +855,8 @@ fn serialize_vec_bools() {
     let val = S {
         flags: vec![true, false, true],
     };
-    let output = serde_kdl::to_string(&val).unwrap();
-    let rt: S = serde_kdl::from_str(&output).unwrap();
+    let output = serde_kdl2::to_string(&val).unwrap();
+    let rt: S = serde_kdl2::from_str(&output).unwrap();
     assert_eq!(val, rt);
 }
 
@@ -866,7 +866,7 @@ fn serialize_vec_option_with_nulls() {
     struct S {
         vals: Vec<Option<i32>>,
     }
-    let output = serde_kdl::to_string(&S {
+    let output = serde_kdl2::to_string(&S {
         vals: vec![Some(1), None, Some(3)],
     })
     .unwrap();
@@ -879,7 +879,7 @@ fn serialize_mixed_seq_with_null() {
     struct S {
         items: Vec<Option<Vec<i32>>>,
     }
-    let output = serde_kdl::to_string(&S {
+    let output = serde_kdl2::to_string(&S {
         items: vec![Some(vec![1, 2]), None, Some(vec![3])],
     })
     .unwrap();
@@ -895,14 +895,14 @@ fn serialize_option_some_null_nested() {
     let mut items = HashMap::new();
     items.insert("present".into(), Some("value".into()));
     items.insert("absent".into(), None);
-    let output = serde_kdl::to_string(&S { items }).unwrap();
+    let output = serde_kdl2::to_string(&S { items }).unwrap();
     assert!(!output.contains("absent"));
     assert!(output.contains("present"));
 }
 
 #[test]
 fn serialize_unsupported_map_key() {
-    let err = serde_kdl::Error::Unsupported("map key must be a string, got Null".into());
+    let err = serde_kdl2::Error::Unsupported("map key must be a string, got Null".into());
     assert!(err.to_string().contains("map key"));
 }
 
@@ -913,15 +913,15 @@ fn serialize_unsupported_map_key() {
 #[test]
 fn error_display_variants() {
     assert_eq!(
-        serde_kdl::Error::TopLevelNotStruct.to_string(),
+        serde_kdl2::Error::TopLevelNotStruct.to_string(),
         "top-level type must be a struct or map"
     );
     assert_eq!(
-        serde_kdl::Error::Message("custom error".into()).to_string(),
+        serde_kdl2::Error::Message("custom error".into()).to_string(),
         "custom error"
     );
     assert!(
-        serde_kdl::Error::TypeMismatch {
+        serde_kdl2::Error::TypeMismatch {
             expected: "string",
             got: "integer".into()
         }
@@ -929,22 +929,22 @@ fn error_display_variants() {
         .contains("expected string")
     );
     assert!(
-        serde_kdl::Error::MissingField("name".into())
+        serde_kdl2::Error::MissingField("name".into())
             .to_string()
             .contains("name")
     );
     assert!(
-        serde_kdl::Error::IntegerOutOfRange(999999)
+        serde_kdl2::Error::IntegerOutOfRange(999999)
             .to_string()
             .contains("999999")
     );
     assert!(
-        serde_kdl::Error::UnknownVariant("Foo".into())
+        serde_kdl2::Error::UnknownVariant("Foo".into())
             .to_string()
             .contains("Foo")
     );
     assert!(
-        serde_kdl::Error::Unsupported("nope".into())
+        serde_kdl2::Error::Unsupported("nope".into())
             .to_string()
             .contains("nope")
     );
@@ -953,11 +953,11 @@ fn error_display_variants() {
 #[test]
 fn serde_error_custom_impls() {
     assert_eq!(
-        <serde_kdl::Error as serde::de::Error>::custom("deser fail").to_string(),
+        <serde_kdl2::Error as serde::de::Error>::custom("deser fail").to_string(),
         "deser fail"
     );
     assert_eq!(
-        <serde_kdl::Error as serde::ser::Error>::custom("ser fail").to_string(),
+        <serde_kdl2::Error as serde::ser::Error>::custom("ser fail").to_string(),
         "ser fail"
     );
 }
@@ -988,7 +988,7 @@ fn field_deserialize_enum_multi_children_error() {
         #[allow(dead_code)]
         shape: Shape,
     }
-    assert!(serde_kdl::from_str::<S>("shape {\n    Circle {\n        radius 5.0\n    }\n    Rectangle {\n        width 10.0\n    }\n}\n").is_err());
+    assert!(serde_kdl2::from_str::<S>("shape {\n    Circle {\n        radius 5.0\n    }\n    Rectangle {\n        width 10.0\n    }\n}\n").is_err());
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -1009,7 +1009,7 @@ fn value_deserializer_any_float() {
     struct S {
         val: f64,
     }
-    let val: S = serde_kdl::from_str("val 3.14").unwrap();
+    let val: S = serde_kdl2::from_str("val 3.14").unwrap();
     assert!((val.val - 3.14).abs() < 0.001);
 }
 
@@ -1021,7 +1021,7 @@ fn value_deserializer_unit_null() {
         marker: (),
         name: String,
     }
-    let val: S = serde_kdl::from_str("marker #null\nname \"test\"\n").unwrap();
+    let val: S = serde_kdl2::from_str("marker #null\nname \"test\"\n").unwrap();
     assert_eq!(val.name, "test");
 }
 
@@ -1031,7 +1031,7 @@ fn value_deserializer_unit_mismatch() {
     struct S {
         marker: (),
     }
-    let val: S = serde_kdl::from_str("marker 42").unwrap();
+    let val: S = serde_kdl2::from_str("marker 42").unwrap();
     assert_eq!(val.marker, ());
 }
 
@@ -1046,7 +1046,7 @@ fn value_deserializer_newtype_struct_named() {
     struct S {
         val: W,
     }
-    let val: S = serde_kdl::from_str("val 42").unwrap();
+    let val: S = serde_kdl2::from_str("val 42").unwrap();
     assert_eq!(val.val, W(42));
 }
 
@@ -1060,7 +1060,7 @@ fn deserialize_any_with_properties() {
     struct S {
         item: HashMap<String, String>,
     }
-    let val: S = serde_kdl::from_str(r#"item key="value""#).unwrap();
+    let val: S = serde_kdl2::from_str(r#"item key="value""#).unwrap();
     assert_eq!(val.item.get("key"), Some(&"value".into()));
 }
 
@@ -1074,7 +1074,7 @@ fn deserialize_any_unit_node() {
         marker: (),
         name: String,
     }
-    let val: S = serde_kdl::from_str("marker\nname \"test\"\n").unwrap();
+    let val: S = serde_kdl2::from_str("marker\nname \"test\"\n").unwrap();
     assert_eq!(val.name, "test");
 }
 
@@ -1093,7 +1093,7 @@ macro_rules! test_untagged_any {
             struct S {
                 data: DynVal,
             }
-            let val: S = serde_kdl::from_str($input).unwrap();
+            let val: S = serde_kdl2::from_str($input).unwrap();
             let DynVal::V(inner) = val.data;
             let check: $variant_ty = $check;
             assert_eq!(inner, check);
@@ -1127,7 +1127,7 @@ fn field_deserialize_any_no_args() {
     struct S {
         data: DynVal,
     }
-    let val: S = serde_kdl::from_str("data").unwrap();
+    let val: S = serde_kdl2::from_str("data").unwrap();
     assert_eq!(val.data, DynVal::Unit);
 }
 
@@ -1142,7 +1142,7 @@ fn field_deserialize_any_float() {
     struct S {
         data: DynVal,
     }
-    let val: S = serde_kdl::from_str("data 3.14").unwrap();
+    let val: S = serde_kdl2::from_str("data 3.14").unwrap();
     let DynVal::Float(f) = val.data;
     assert!((f - 3.14).abs() < 0.001);
 }
@@ -1158,7 +1158,7 @@ fn field_deserialize_any_bool() {
     struct S {
         data: DynVal,
     }
-    let val: S = serde_kdl::from_str("data #true").unwrap();
+    let val: S = serde_kdl2::from_str("data #true").unwrap();
     let DynVal::Bool(b) = val.data;
     assert!(b);
 }
@@ -1175,7 +1175,7 @@ fn field_deserialize_any_null() {
     struct S {
         data: Option<DynVal>,
     }
-    let val: S = serde_kdl::from_str("data #null").unwrap();
+    let val: S = serde_kdl2::from_str("data #null").unwrap();
     assert_eq!(val.data, None);
 }
 
@@ -1192,7 +1192,7 @@ fn field_deserialize_any_integer_limitation() {
         #[allow(dead_code)]
         data: DynVal,
     }
-    assert!(serde_kdl::from_str::<S>("data 42").is_err());
+    assert!(serde_kdl2::from_str::<S>("data 42").is_err());
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -1206,7 +1206,7 @@ fn document_deserialize_any_as_map() {
     enum TopLevel {
         Config { name: String, label: String },
     }
-    let val: TopLevel = serde_kdl::from_str("name \"test\"\nlabel \"hello\"\n").unwrap();
+    let val: TopLevel = serde_kdl2::from_str("name \"test\"\nlabel \"hello\"\n").unwrap();
     assert_eq!(
         val,
         TopLevel::Config {
@@ -1218,14 +1218,14 @@ fn document_deserialize_any_as_map() {
 
 #[test]
 fn document_deserialize_unit() {
-    let _: () = serde_kdl::from_str("").unwrap();
+    let _: () = serde_kdl2::from_str("").unwrap();
 }
 
 #[test]
 fn document_deserialize_unit_struct() {
     #[derive(Deserialize, Debug, PartialEq)]
     struct Empty;
-    let _: Empty = serde_kdl::from_str("").unwrap();
+    let _: Empty = serde_kdl2::from_str("").unwrap();
 }
 
 #[test]
@@ -1236,7 +1236,7 @@ fn document_deserialize_newtype_struct() {
     }
     #[derive(Deserialize, Debug, PartialEq)]
     struct Outer(Inner);
-    let val: Outer = serde_kdl::from_str("name \"test\"").unwrap();
+    let val: Outer = serde_kdl2::from_str("name \"test\"").unwrap();
     assert_eq!(val.0.name, "test");
 }
 
@@ -1261,7 +1261,7 @@ fn deserialize_struct_from_properties() {
     struct S {
         point: Point,
     }
-    let val: S = serde_kdl::from_str(r#"point x=1.0 y=2.0"#).unwrap();
+    let val: S = serde_kdl2::from_str(r#"point x=1.0 y=2.0"#).unwrap();
     assert_eq!(val.point, Point { x: 1.0, y: 2.0 });
 }
 
@@ -1271,7 +1271,7 @@ fn deserialize_map_from_properties() {
     struct S {
         meta: HashMap<String, String>,
     }
-    let val: S = serde_kdl::from_str(r#"meta author="Alice" version="1.0""#).unwrap();
+    let val: S = serde_kdl2::from_str(r#"meta author="Alice" version="1.0""#).unwrap();
     assert_eq!(val.meta.get("author"), Some(&String::from("Alice")));
     assert_eq!(val.meta.get("version"), Some(&"1.0".into()));
 }
@@ -1294,7 +1294,7 @@ fn field_deserialize_unit_struct() {
     struct S {
         tag: Marker,
     }
-    let val: S = serde_kdl::from_str("tag").unwrap();
+    let val: S = serde_kdl2::from_str("tag").unwrap();
     assert_eq!(val.tag, Marker);
 }
 
@@ -1310,7 +1310,7 @@ fn field_deserialize_newtype_struct() {
     struct S {
         data: W,
     }
-    let val: S = serde_kdl::from_str("data {\n    x 42\n}\n").unwrap();
+    let val: S = serde_kdl2::from_str("data {\n    x 42\n}\n").unwrap();
     assert_eq!(val.data, W(Inner { x: 42 }));
 }
 
@@ -1325,7 +1325,7 @@ fn field_deserialize_struct_from_properties() {
     struct S {
         pos: Point,
     }
-    let val: S = serde_kdl::from_str("pos x=1.0 y=2.0").unwrap();
+    let val: S = serde_kdl2::from_str("pos x=1.0 y=2.0").unwrap();
     assert_eq!(val.pos, Point { x: 1.0, y: 2.0 });
 }
 
@@ -1339,7 +1339,7 @@ fn field_deserialize_struct_single_arg() {
     struct S {
         item: W,
     }
-    let val: S = serde_kdl::from_str("item 42").unwrap();
+    let val: S = serde_kdl2::from_str("item 42").unwrap();
     assert_eq!(val.item, W { value: 42 });
 }
 
@@ -1356,7 +1356,7 @@ fn field_deserialize_struct_empty() {
     struct S {
         data: Empty,
     }
-    let val: S = serde_kdl::from_str("data").unwrap();
+    let val: S = serde_kdl2::from_str("data").unwrap();
     assert_eq!(val.data, Empty { a: None, b: None });
 }
 
@@ -1387,7 +1387,7 @@ fn enum_newtype_variant_via_arg() {
     struct S {
         value: Val,
     }
-    let val: S = serde_kdl::from_str(r#"value "Number" 42"#).unwrap();
+    let val: S = serde_kdl2::from_str(r#"value "Number" 42"#).unwrap();
     assert_eq!(val.value, Val::Number(42));
 }
 
@@ -1401,7 +1401,7 @@ fn enum_tuple_variant_via_args() {
     struct S {
         value: Val,
     }
-    let val: S = serde_kdl::from_str(r#"value "Point" 1.0 2.0"#).unwrap();
+    let val: S = serde_kdl2::from_str(r#"value "Point" 1.0 2.0"#).unwrap();
     assert_eq!(val.value, Val::Point(1.0, 2.0));
 }
 
@@ -1415,7 +1415,7 @@ fn enum_struct_variant_via_props() {
     struct S {
         value: Val,
     }
-    let val: S = serde_kdl::from_str(r#"value "Circle" radius=5.0"#).unwrap();
+    let val: S = serde_kdl2::from_str(r#"value "Circle" radius=5.0"#).unwrap();
     assert_eq!(val.value, Val::Circle { radius: 5.0 });
 }
 
@@ -1430,7 +1430,7 @@ fn enum_complex_unit_variant() {
     struct S {
         status: Status,
     }
-    let val: S = serde_kdl::from_str("status {\n    Active\n}\n").unwrap();
+    let val: S = serde_kdl2::from_str("status {\n    Active\n}\n").unwrap();
     assert_eq!(val.status, Status::Active);
 }
 
@@ -1444,7 +1444,7 @@ fn enum_complex_tuple_variant() {
     struct S {
         data: Val,
     }
-    let val: S = serde_kdl::from_str("data {\n    Point 1.0 2.0 3.0\n}\n").unwrap();
+    let val: S = serde_kdl2::from_str("data {\n    Point 1.0 2.0 3.0\n}\n").unwrap();
     assert_eq!(val.data, Val::Point(1.0, 2.0, 3.0));
 }
 
@@ -1458,7 +1458,7 @@ fn enum_complex_struct_variant_from_props() {
     struct S {
         shape: Val,
     }
-    let val: S = serde_kdl::from_str("shape {\n    Circle radius=5.0\n}\n").unwrap();
+    let val: S = serde_kdl2::from_str("shape {\n    Circle radius=5.0\n}\n").unwrap();
     assert_eq!(val.shape, Val::Circle { radius: 5.0 });
 }
 
@@ -1546,7 +1546,7 @@ fn node_content_newtype_in_seq() {
     struct S {
         dist: Vec<Meters>,
     }
-    let val: S = serde_kdl::from_str("dist 1.0\ndist 2.0\n").unwrap();
+    let val: S = serde_kdl2::from_str("dist 1.0\ndist 2.0\n").unwrap();
     assert_eq!(val.dist, vec![Meters(1.0), Meters(2.0)]);
 }
 
@@ -1558,7 +1558,7 @@ fn node_content_tuple_struct_in_seq() {
     struct S {
         pair: Vec<Pair>,
     }
-    let val: S = serde_kdl::from_str("pair 1.0 2.0\npair 3.0 4.0\n").unwrap();
+    let val: S = serde_kdl2::from_str("pair 1.0 2.0\npair 3.0 4.0\n").unwrap();
     assert_eq!(val.pair, vec![Pair(1.0, 2.0), Pair(3.0, 4.0)]);
 }
 
@@ -1570,7 +1570,7 @@ fn node_content_unit_struct_in_seq() {
     struct S {
         tag: Vec<Marker>,
     }
-    let val: S = serde_kdl::from_str("tag\ntag\n").unwrap();
+    let val: S = serde_kdl2::from_str("tag\ntag\n").unwrap();
     assert_eq!(val.tag, vec![Marker, Marker]);
 }
 
@@ -1587,7 +1587,7 @@ fn node_content_struct_from_properties_in_seq() {
     struct S {
         point: Vec<Point>,
     }
-    let val: S = serde_kdl::from_str("point x=1.0 y=2.0\npoint x=3.0 y=4.0\n").unwrap();
+    let val: S = serde_kdl2::from_str("point x=1.0 y=2.0\npoint x=3.0 y=4.0\n").unwrap();
     assert_eq!(
         val.point,
         vec![Point { x: 1.0, y: 2.0 }, Point { x: 3.0, y: 4.0 }]
@@ -1604,7 +1604,7 @@ fn node_content_single_arg_struct_in_seq() {
     struct S {
         item: Vec<W>,
     }
-    let val: S = serde_kdl::from_str("item 10\nitem 20\n").unwrap();
+    let val: S = serde_kdl2::from_str("item 10\nitem 20\n").unwrap();
     assert_eq!(val.item, vec![W { value: 10 }, W { value: 20 }]);
 }
 
@@ -1621,7 +1621,7 @@ fn node_content_struct_empty_node_in_seq() {
     struct S {
         item: Vec<Item>,
     }
-    let val: S = serde_kdl::from_str("item\nitem\n").unwrap();
+    let val: S = serde_kdl2::from_str("item\nitem\n").unwrap();
     assert_eq!(
         val.item,
         vec![Item { a: None, b: None }, Item { a: None, b: None }]
@@ -1636,7 +1636,7 @@ fn node_content_map_from_properties_in_seq() {
     struct S {
         entry: Vec<HashMap<String, String>>,
     }
-    let val: S = serde_kdl::from_str("entry a=\"1\" b=\"2\"\nentry c=\"3\"\n").unwrap();
+    let val: S = serde_kdl2::from_str("entry a=\"1\" b=\"2\"\nentry c=\"3\"\n").unwrap();
     assert_eq!(val.entry.len(), 2);
     assert_eq!(val.entry[0].get("a"), Some(&"1".into()));
 }
@@ -1648,7 +1648,7 @@ fn node_content_map_from_children() {
         entry: Vec<HashMap<String, String>>,
     }
     let val: S =
-        serde_kdl::from_str("entry {\n    a \"1\"\n    b \"2\"\n}\nentry {\n    c \"3\"\n}\n")
+        serde_kdl2::from_str("entry {\n    a \"1\"\n    b \"2\"\n}\nentry {\n    c \"3\"\n}\n")
             .unwrap();
     assert_eq!(val.entry[0].get("a"), Some(&"1".into()));
     assert_eq!(val.entry[1].get("c"), Some(&"3".into()));
@@ -1660,7 +1660,7 @@ fn node_content_map_from_props_no_children() {
     struct S {
         entry: Vec<HashMap<String, String>>,
     }
-    let val: S = serde_kdl::from_str("entry a=\"1\" b=\"2\"\nentry c=\"3\"\n").unwrap();
+    let val: S = serde_kdl2::from_str("entry a=\"1\" b=\"2\"\nentry c=\"3\"\n").unwrap();
     assert_eq!(val.entry[0].get("a"), Some(&"1".into()));
     assert_eq!(val.entry[1].get("c"), Some(&"3".into()));
 }
@@ -1673,7 +1673,7 @@ fn node_content_complex_enum_in_seq() {
     struct S {
         shape: Vec<Shape>,
     }
-    let val: S = serde_kdl::from_str(
+    let val: S = serde_kdl2::from_str(
         "shape {\n    Circle {\n        radius 5.0\n    }\n}\nshape {\n    Rectangle {\n        width 10.0\n        height 20.0\n    }\n}\n"
     ).unwrap();
     assert_eq!(val.shape[0], Shape::Circle { radius: 5.0 });
@@ -1698,7 +1698,7 @@ fn node_content_ignored_any() {
     struct S {
         item: Vec<Item>,
     }
-    let val: S = serde_kdl::from_str("item {\n    name \"test\"\n    extra \"ignored\"\n}\nitem {\n    name \"test2\"\n    bonus 99\n}\n").unwrap();
+    let val: S = serde_kdl2::from_str("item {\n    name \"test\"\n    extra \"ignored\"\n}\nitem {\n    name \"test2\"\n    bonus 99\n}\n").unwrap();
     assert_eq!(val.item.len(), 2);
     assert_eq!(val.item[0].name, "test");
 }
@@ -1711,7 +1711,7 @@ fn node_content_with_children() {
     struct S {
         server: Vec<Server>,
     }
-    let val: S = serde_kdl::from_str(
+    let val: S = serde_kdl2::from_str(
         "server {\n    host \"a\"\n    port 1\n}\nserver {\n    host \"b\"\n    port 2\n}\n",
     )
     .unwrap();
@@ -1758,7 +1758,7 @@ fn args_seq_newtype_values() {
     struct S {
         dists: Vec<Meters>,
     }
-    let val: S = serde_kdl::from_str("dists 1.0 2.0 3.0").unwrap();
+    let val: S = serde_kdl2::from_str("dists 1.0 2.0 3.0").unwrap();
     assert_eq!(val.dists, vec![Meters(1.0), Meters(2.0), Meters(3.0)]);
 }
 
@@ -1770,7 +1770,7 @@ fn value_deserializer_unit_struct_in_args() {
     struct S {
         vals: Vec<Marker>,
     }
-    let val: S = serde_kdl::from_str("vals #null #null").unwrap();
+    let val: S = serde_kdl2::from_str("vals #null #null").unwrap();
     assert_eq!(val.vals, vec![Marker, Marker]);
 }
 
@@ -1809,7 +1809,7 @@ macro_rules! test_custom_str_deser {
             struct S {
                 $field: $field_ty,
             }
-            let val: S = serde_kdl::from_str($input).unwrap();
+            let val: S = serde_kdl2::from_str($input).unwrap();
             assert_eq!(val.$field, $expected);
         }
     };
@@ -1842,7 +1842,7 @@ macro_rules! test_custom_bytes_deser {
             struct S {
                 $field: $field_ty,
             }
-            let val: S = serde_kdl::from_str($input).unwrap();
+            let val: S = serde_kdl2::from_str($input).unwrap();
             assert_eq!(val.$field, $expected);
         }
     };
@@ -1882,7 +1882,7 @@ macro_rules! test_custom_seq_bytes_deser {
             struct S {
                 $field: $field_ty,
             }
-            let val: S = serde_kdl::from_str($input).unwrap();
+            let val: S = serde_kdl2::from_str($input).unwrap();
             assert_eq!(val.$field, $expected);
         }
     };
@@ -1969,7 +1969,7 @@ fn value_deserializer_bytes_type_mismatch_via_seq() {
         #[allow(dead_code)]
         data: Vec<Custom>,
     }
-    assert!(serde_kdl::from_str::<S>("data 42").is_err());
+    assert!(serde_kdl2::from_str::<S>("data 42").is_err());
 }
 
 // -- FieldDeserializer error: deserialize_bytes on non-seq --
@@ -1998,7 +1998,7 @@ fn value_deserializer_bytes_type_mismatch() {
         #[allow(dead_code)]
         data: ByteString,
     }
-    assert!(serde_kdl::from_str::<S>("data 42").is_err());
+    assert!(serde_kdl2::from_str::<S>("data 42").is_err());
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -2007,7 +2007,7 @@ fn value_deserializer_bytes_type_mismatch() {
 
 #[test]
 fn value_deserializer_seq_error() {
-    let err = serde_kdl::Error::TypeMismatch {
+    let err = serde_kdl2::Error::TypeMismatch {
         expected: "sequence",
         got: "scalar value".into(),
     };
