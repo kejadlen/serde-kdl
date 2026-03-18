@@ -1,3 +1,4 @@
+use indoc::indoc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -162,12 +163,17 @@ struct UnitStruct;
 deser_ok!(
     deserialize_simple_struct,
     SimpleConfig,
-    "title \"My App\"\ncount 42\nenabled #true\nratio 3.14\n",
+    indoc! {r#"
+        title "My App"
+        count 42
+        enabled #true
+        ratio 3.125
+    "#},
     SimpleConfig {
         title: "My App".into(),
         count: 42,
         enabled: true,
-        ratio: 3.14
+        ratio: 3.125
     }
 );
 
@@ -178,14 +184,20 @@ roundtrip!(
         title: "My App".into(),
         count: 42,
         enabled: true,
-        ratio: 3.14,
+        ratio: 3.125,
     }
 );
 
 deser_ok!(
     deserialize_nested_struct,
     AppConfig,
-    "name \"webapp\"\nserver {\n    host \"localhost\"\n    port 8080\n}\n",
+    indoc! {r#"
+        name "webapp"
+        server {
+            host "localhost"
+            port 8080
+        }
+    "#},
     AppConfig {
         name: "webapp".into(),
         server: Server {
@@ -218,7 +230,10 @@ struct Tagged {
 deser_ok!(
     deserialize_vec_primitives,
     Tagged,
-    "name \"project\"\ntags \"web\" \"rust\" \"config\"\n",
+    indoc! {r#"
+        name "project"
+        tags "web" "rust" "config"
+    "#},
     Tagged {
         name: "project".into(),
         tags: vec!["web".into(), "rust".into(), "config".into()],
@@ -244,7 +259,16 @@ struct Cluster {
 deser_ok!(
     deserialize_vec_structs,
     Cluster,
-    "server {\n    host \"localhost\"\n    port 8080\n}\nserver {\n    host \"example.com\"\n    port 443\n}\n",
+    indoc! {r#"
+        server {
+            host "localhost"
+            port 8080
+        }
+        server {
+            host "example.com"
+            port 443
+        }
+    "#},
     Cluster {
         server: vec![
             Server {
@@ -281,7 +305,13 @@ roundtrip!(
 deser_field!(
     deserialize_dash_children,
     items: Vec<i32>,
-    "items {\n    - 1\n    - 2\n    - 3\n}\n",
+    indoc! {"
+        items {
+            - 1
+            - 2
+            - 3
+        }
+    "},
     vec![1, 2, 3]
 );
 
@@ -296,7 +326,10 @@ struct OptionalFields {
 deser_ok!(
     deserialize_option_present,
     OptionalFields,
-    "required \"hello\"\noptional \"world\"\n",
+    indoc! {r#"
+        required "hello"
+        optional "world"
+    "#},
     OptionalFields {
         required: String::from("hello"),
         optional: Some(String::from("world"))
@@ -306,7 +339,7 @@ deser_ok!(
 deser_ok!(
     deserialize_option_absent,
     OptionalFields,
-    "required \"hello\"\n",
+    r#"required "hello""#,
     OptionalFields {
         required: String::from("hello"),
         optional: None
@@ -316,7 +349,10 @@ deser_ok!(
 deser_ok!(
     deserialize_option_null,
     OptionalFields,
-    "required \"hello\"\noptional #null\n",
+    indoc! {r#"
+        required "hello"
+        optional #null
+    "#},
     OptionalFields {
         required: String::from("hello"),
         optional: None
@@ -349,7 +385,10 @@ fn serialize_option() {
 deser_ok!(
     deserialize_unit_variant,
     Colored,
-    "name \"widget\"\ncolor \"Red\"\n",
+    indoc! {r#"
+        name "widget"
+        color "Red"
+    "#},
     Colored {
         name: "widget".into(),
         color: Color::Red
@@ -376,7 +415,14 @@ struct Drawing {
 deser_ok!(
     deserialize_struct_variant,
     Drawing,
-    "name \"my drawing\"\nshape {\n    Circle {\n        radius 5.0\n    }\n}\n",
+    indoc! {r#"
+        name "my drawing"
+        shape {
+            Circle {
+                radius 5.0
+            }
+        }
+    "#},
     Drawing {
         name: "my drawing".into(),
         shape: Shape::Circle { radius: 5.0 }
@@ -411,7 +457,11 @@ struct Wrapped {
 deser_ok!(
     deserialize_newtype_variant,
     Wrapped,
-    "value {\n    Text \"hello\"\n}\n",
+    indoc! {r#"
+        value {
+            Text "hello"
+        }
+    "#},
     Wrapped {
         value: Wrapper::Text(String::from("hello"))
     }
@@ -434,8 +484,13 @@ struct WithMap {
 
 #[test]
 fn deserialize_hashmap() {
-    let val: WithMap =
-        serde_kdl2::from_str("settings {\n    key1 \"value1\"\n    key2 \"value2\"\n}\n").unwrap();
+    let val: WithMap = serde_kdl2::from_str(indoc! {r#"
+        settings {
+            key1 "value1"
+            key2 "value2"
+        }
+    "#})
+    .unwrap();
     assert_eq!(val.settings.get("key1"), Some(&"value1".into()));
     assert_eq!(val.settings.get("key2"), Some(&"value2".into()));
 }
@@ -514,7 +569,13 @@ struct Level1 {
 
 #[test]
 fn deeply_nested() {
-    let input = "middle {\n    inner {\n        value \"deep\"\n    }\n}\n";
+    let input = indoc! {r#"
+        middle {
+            inner {
+                value "deep"
+            }
+        }
+    "#};
     let val: Level1 = serde_kdl2::from_str(input).unwrap();
     assert_eq!(val.middle.inner.value, "deep");
     let output = serde_kdl2::to_string(&val).unwrap();
@@ -533,7 +594,10 @@ struct Booleans {
 deser_ok!(
     booleans_deser,
     Booleans,
-    "yes #true\nno #false\n",
+    indoc! {"
+        yes #true
+        no #false
+    "},
     Booleans {
         yes: true,
         no: false
@@ -662,7 +726,7 @@ roundtrip!(
         big_unsigned: 1_000_000_000_000
     }
 );
-roundtrip!(roundtrip_f32, WF32, WF32 { value: 3.14 });
+roundtrip!(roundtrip_f32, WF32, WF32 { value: 3.125 });
 roundtrip!(
     roundtrip_i128,
     WI128,
@@ -988,7 +1052,17 @@ fn field_deserialize_enum_multi_children_error() {
         #[allow(dead_code)]
         shape: Shape,
     }
-    assert!(serde_kdl2::from_str::<S>("shape {\n    Circle {\n        radius 5.0\n    }\n    Rectangle {\n        width 10.0\n    }\n}\n").is_err());
+    let input = indoc! {"
+        shape {
+            Circle {
+                radius 5.0
+            }
+            Rectangle {
+                width 10.0
+            }
+        }
+    "};
+    assert!(serde_kdl2::from_str::<S>(input).is_err());
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -1009,8 +1083,8 @@ fn value_deserializer_any_float() {
     struct S {
         val: f64,
     }
-    let val: S = serde_kdl2::from_str("val 3.14").unwrap();
-    assert!((val.val - 3.14).abs() < 0.001);
+    let val: S = serde_kdl2::from_str("val 3.125").unwrap();
+    assert!((val.val - 3.125).abs() < 0.001);
 }
 
 #[test]
@@ -1021,7 +1095,11 @@ fn value_deserializer_unit_null() {
         marker: (),
         name: String,
     }
-    let val: S = serde_kdl2::from_str("marker #null\nname \"test\"\n").unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {r#"
+        marker #null
+        name "test"
+    "#})
+    .unwrap();
     assert_eq!(val.name, "test");
 }
 
@@ -1074,7 +1152,11 @@ fn deserialize_any_unit_node() {
         marker: (),
         name: String,
     }
-    let val: S = serde_kdl2::from_str("marker\nname \"test\"\n").unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {r#"
+        marker
+        name "test"
+    "#})
+    .unwrap();
     assert_eq!(val.name, "test");
 }
 
@@ -1113,8 +1195,30 @@ test_untagged_any!(
     r#"data "a" "b" "c""#,
     vec!["a".into(), "b".into(), "c".into()]
 );
-test_untagged_any!(field_deserialize_any_children, HashMap<String, String>, "data {\n    key \"value\"\n}\n", { let mut m = HashMap::new(); m.insert("key".into(), "value".into()); m });
-test_untagged_any!(field_deserialize_any_props, HashMap<String, String>, r#"data key="value""#, { let mut m = HashMap::new(); m.insert("key".into(), "value".into()); m });
+test_untagged_any!(
+    field_deserialize_any_children,
+    HashMap<String, String>,
+    indoc! {r#"
+        data {
+            key "value"
+        }
+    "#},
+    {
+        let mut m = HashMap::new();
+        m.insert("key".into(), "value".into());
+        m
+    }
+);
+test_untagged_any!(
+    field_deserialize_any_props,
+    HashMap<String, String>,
+    r#"data key="value""#,
+    {
+        let mut m = HashMap::new();
+        m.insert("key".into(), "value".into());
+        m
+    }
+);
 
 #[test]
 fn field_deserialize_any_no_args() {
@@ -1142,9 +1246,9 @@ fn field_deserialize_any_float() {
     struct S {
         data: DynVal,
     }
-    let val: S = serde_kdl2::from_str("data 3.14").unwrap();
+    let val: S = serde_kdl2::from_str("data 3.125").unwrap();
     let DynVal::Float(f) = val.data;
-    assert!((f - 3.14).abs() < 0.001);
+    assert!((f - 3.125).abs() < 0.001);
 }
 
 #[test]
@@ -1206,7 +1310,11 @@ fn document_deserialize_any_as_map() {
     enum TopLevel {
         Config { name: String, label: String },
     }
-    let val: TopLevel = serde_kdl2::from_str("name \"test\"\nlabel \"hello\"\n").unwrap();
+    let val: TopLevel = serde_kdl2::from_str(indoc! {r#"
+        name "test"
+        label "hello"
+    "#})
+    .unwrap();
     assert_eq!(
         val,
         TopLevel::Config {
@@ -1236,15 +1344,47 @@ fn document_deserialize_newtype_struct() {
     }
     #[derive(Deserialize, Debug, PartialEq)]
     struct Outer(Inner);
-    let val: Outer = serde_kdl2::from_str("name \"test\"").unwrap();
+    let val: Outer = serde_kdl2::from_str(r#"name "test""#).unwrap();
     assert_eq!(val.0.name, "test");
 }
 
 // ── Extra field handling (ignored_any) ─────────────────────────────────
 
-deser_field!(deserialize_with_extra_fields, name: String, "name \"test\"\nextra \"ignored\"\nanother 42\n", String::from("test"));
-deser_field!(document_deserialize_ignored_any, name: String, "name \"test\"\nunknown \"ignored\"\n", String::from("test"));
-deser_field!(field_ignored_any_with_children, name: String, "name \"test\"\ncomplex {\n    nested \"value\"\n    deep {\n        x 1\n    }\n}\n", String::from("test"));
+deser_field!(
+    deserialize_with_extra_fields,
+    name: String,
+    indoc! {r#"
+        name "test"
+        extra "ignored"
+        another 42
+    "#},
+    String::from("test")
+);
+
+deser_field!(
+    document_deserialize_ignored_any,
+    name: String,
+    indoc! {r#"
+        name "test"
+        unknown "ignored"
+    "#},
+    String::from("test")
+);
+
+deser_field!(
+    field_ignored_any_with_children,
+    name: String,
+    indoc! {r#"
+        name "test"
+        complex {
+            nested "value"
+            deep {
+                x 1
+            }
+        }
+    "#},
+    String::from("test")
+);
 
 // ════════════════════════════════════════════════════════════════════════
 // Properties-based struct/map deserialization — data-driven
@@ -1276,11 +1416,27 @@ fn deserialize_map_from_properties() {
     assert_eq!(val.meta.get("version"), Some(&"1.0".into()));
 }
 
-deser_field!(deserialize_empty_map_from_node, meta: HashMap<String, String>, "meta", HashMap::new());
+deser_field!(
+    deserialize_empty_map_from_node,
+    meta: HashMap<String, String>,
+    "meta",
+    HashMap::new()
+);
 
 // ── Non-dash children as sequence ──────────────────────────────────────
 
-deser_field!(deserialize_children_as_sequence, items: Vec<i32>, "items {\n    item 1\n    item 2\n    item 3\n}\n", vec![1, 2, 3]);
+deser_field!(
+    deserialize_children_as_sequence,
+    items: Vec<i32>,
+    indoc! {"
+        items {
+            item 1
+            item 2
+            item 3
+        }
+    "},
+    vec![1, 2, 3]
+);
 
 // ════════════════════════════════════════════════════════════════════════
 // FieldDeserializer misc paths — data-driven
@@ -1310,7 +1466,12 @@ fn field_deserialize_newtype_struct() {
     struct S {
         data: W,
     }
-    let val: S = serde_kdl2::from_str("data {\n    x 42\n}\n").unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {"
+        data {
+            x 42
+        }
+    "})
+    .unwrap();
     assert_eq!(val.data, W(Inner { x: 42 }));
 }
 
@@ -1360,12 +1521,20 @@ fn field_deserialize_struct_empty() {
     assert_eq!(val.data, Empty { a: None, b: None });
 }
 
-deser_field!(field_deserializer_bytes_as_seq, data: Vec<u8>, "data 72 101 108", vec![72u8, 101, 108]);
+deser_field!(
+    field_deserializer_bytes_as_seq,
+    data: Vec<u8>,
+    "data 72 101 108",
+    vec![72u8, 101, 108]
+);
 
 deser_ok!(
     deserialize_identifier_field,
     Colored,
-    "name \"widget\"\ncolor \"Blue\"\n",
+    indoc! {r#"
+        name "widget"
+        color "Blue"
+    "#},
     Colored {
         name: "widget".into(),
         color: Color::Blue
@@ -1430,7 +1599,12 @@ fn enum_complex_unit_variant() {
     struct S {
         status: Status,
     }
-    let val: S = serde_kdl2::from_str("status {\n    Active\n}\n").unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {"
+        status {
+            Active
+        }
+    "})
+    .unwrap();
     assert_eq!(val.status, Status::Active);
 }
 
@@ -1444,7 +1618,12 @@ fn enum_complex_tuple_variant() {
     struct S {
         data: Val,
     }
-    let val: S = serde_kdl2::from_str("data {\n    Point 1.0 2.0 3.0\n}\n").unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {"
+        data {
+            Point 1.0 2.0 3.0
+        }
+    "})
+    .unwrap();
     assert_eq!(val.data, Val::Point(1.0, 2.0, 3.0));
 }
 
@@ -1458,7 +1637,12 @@ fn enum_complex_struct_variant_from_props() {
     struct S {
         shape: Val,
     }
-    let val: S = serde_kdl2::from_str("shape {\n    Circle radius=5.0\n}\n").unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {"
+        shape {
+            Circle radius=5.0
+        }
+    "})
+    .unwrap();
     assert_eq!(val.shape, Val::Circle { radius: 5.0 });
 }
 
@@ -1469,70 +1653,267 @@ fn enum_complex_struct_variant_from_props() {
 // deserialized into Vec<T>. Each entry tests a different element type.
 // ════════════════════════════════════════════════════════════════════════
 
-deser_repeated_vec!(node_content_bool_in_seq,      flag: Vec<bool>,   "flag #true\nflag #false\n",  vec![true, false]);
-deser_repeated_vec!(node_content_i8_in_seq,         val: Vec<i8>,     "val 1\nval 2\n",             vec![1i8, 2]);
-deser_repeated_vec!(node_content_i16_in_seq,        val: Vec<i16>,    "val 1\nval 2\n",             vec![1i16, 2]);
-deser_repeated_vec!(node_content_i32_in_seq,        val: Vec<i32>,    "val 1\nval 2\n",             vec![1i32, 2]);
-deser_repeated_vec!(node_content_i64_in_seq,        val: Vec<i64>,    "val 1\nval 2\n",             vec![1i64, 2]);
-deser_repeated_vec!(node_content_i128_in_seq,       val: Vec<i128>,   "val 1\nval 2\n",             vec![1i128, 2]);
-deser_repeated_vec!(node_content_u8_in_seq,         val: Vec<u8>,     "val 1\nval 2\n",             vec![1u8, 2]);
-deser_repeated_vec!(node_content_u16_in_seq,        val: Vec<u16>,    "val 1\nval 2\n",             vec![1u16, 2]);
-deser_repeated_vec!(node_content_u32_in_seq,        val: Vec<u32>,    "val 1\nval 2\n",             vec![1u32, 2]);
-deser_repeated_vec!(node_content_u64_in_seq,        val: Vec<u64>,    "val 1\nval 2\n",             vec![1u64, 2]);
-deser_repeated_vec!(node_content_u128_in_seq,       val: Vec<u128>,   "val 1\nval 2\n",             vec![1u128, 2]);
-deser_repeated_vec!(node_content_f32_in_seq,        val: Vec<f32>,    "val 1.5\nval 2.5\n",         vec![1.5f32, 2.5]);
-deser_repeated_vec!(node_content_f64_in_seq,        val: Vec<f64>,    "val 1.5\nval 2.5\n",         vec![1.5f64, 2.5]);
-deser_repeated_vec!(node_content_char_in_seq,       ch: Vec<char>,    "ch \"A\"\nch \"B\"\n",       vec!['A', 'B']);
-deser_repeated_vec!(node_content_string_in_seq,     name: Vec<String>, "name \"Alice\"\nname \"Bob\"\n", vec![String::from("Alice"), String::from("Bob")]);
-deser_repeated_vec!(node_content_unit_in_seq,       marker: Vec<()>,  "marker\nmarker\n",           vec![(), ()]);
-
-deser_repeated_vec!(node_content_option_in_seq, val: Vec<Option<i32>>, "val 1\nval #null\nval 3\n", vec![Some(1), None, Some(3)]);
+deser_repeated_vec!(
+    node_content_bool_in_seq,
+    flag: Vec<bool>,
+    indoc! {"
+        flag #true
+        flag #false
+    "},
+    vec![true, false]
+);
 
 deser_repeated_vec!(
-    node_content_tuple_in_seq, coords: Vec<(f64, f64)>,
-    "coords 1.0 2.0\ncoords 3.0 4.0\n",
+    node_content_i8_in_seq,
+    val: Vec<i8>,
+    indoc! {"
+        val 1
+        val 2
+    "},
+    vec![1i8, 2]
+);
+
+deser_repeated_vec!(
+    node_content_i16_in_seq,
+    val: Vec<i16>,
+    indoc! {"
+        val 1
+        val 2
+    "},
+    vec![1i16, 2]
+);
+
+deser_repeated_vec!(
+    node_content_i32_in_seq,
+    val: Vec<i32>,
+    indoc! {"
+        val 1
+        val 2
+    "},
+    vec![1i32, 2]
+);
+
+deser_repeated_vec!(
+    node_content_i64_in_seq,
+    val: Vec<i64>,
+    indoc! {"
+        val 1
+        val 2
+    "},
+    vec![1i64, 2]
+);
+
+deser_repeated_vec!(
+    node_content_i128_in_seq,
+    val: Vec<i128>,
+    indoc! {"
+        val 1
+        val 2
+    "},
+    vec![1i128, 2]
+);
+
+deser_repeated_vec!(
+    node_content_u8_in_seq,
+    val: Vec<u8>,
+    indoc! {"
+        val 1
+        val 2
+    "},
+    vec![1u8, 2]
+);
+
+deser_repeated_vec!(
+    node_content_u16_in_seq,
+    val: Vec<u16>,
+    indoc! {"
+        val 1
+        val 2
+    "},
+    vec![1u16, 2]
+);
+
+deser_repeated_vec!(
+    node_content_u32_in_seq,
+    val: Vec<u32>,
+    indoc! {"
+        val 1
+        val 2
+    "},
+    vec![1u32, 2]
+);
+
+deser_repeated_vec!(
+    node_content_u64_in_seq,
+    val: Vec<u64>,
+    indoc! {"
+        val 1
+        val 2
+    "},
+    vec![1u64, 2]
+);
+
+deser_repeated_vec!(
+    node_content_u128_in_seq,
+    val: Vec<u128>,
+    indoc! {"
+        val 1
+        val 2
+    "},
+    vec![1u128, 2]
+);
+
+deser_repeated_vec!(
+    node_content_f32_in_seq,
+    val: Vec<f32>,
+    indoc! {"
+        val 1.5
+        val 2.5
+    "},
+    vec![1.5f32, 2.5]
+);
+
+deser_repeated_vec!(
+    node_content_f64_in_seq,
+    val: Vec<f64>,
+    indoc! {"
+        val 1.5
+        val 2.5
+    "},
+    vec![1.5f64, 2.5]
+);
+
+deser_repeated_vec!(
+    node_content_char_in_seq,
+    ch: Vec<char>,
+    indoc! {r#"
+        ch "A"
+        ch "B"
+    "#},
+    vec!['A', 'B']
+);
+
+deser_repeated_vec!(
+    node_content_string_in_seq,
+    name: Vec<String>,
+    indoc! {r#"
+        name "Alice"
+        name "Bob"
+    "#},
+    vec![String::from("Alice"), String::from("Bob")]
+);
+
+deser_repeated_vec!(
+    node_content_unit_in_seq,
+    marker: Vec<()>,
+    indoc! {"
+        marker
+        marker
+    "},
+    vec![(), ()]
+);
+
+deser_repeated_vec!(
+    node_content_option_in_seq,
+    val: Vec<Option<i32>>,
+    indoc! {"
+        val 1
+        val #null
+        val 3
+    "},
+    vec![Some(1), None, Some(3)]
+);
+
+deser_repeated_vec!(
+    node_content_tuple_in_seq,
+    coords: Vec<(f64, f64)>,
+    indoc! {"
+        coords 1.0 2.0
+        coords 3.0 4.0
+    "},
     vec![(1.0, 2.0), (3.0, 4.0)]
 );
 
 deser_repeated_vec!(
-    node_content_enum_in_seq, color: Vec<Color>,
-    "color \"Red\"\ncolor \"Blue\"\n",
+    node_content_enum_in_seq,
+    color: Vec<Color>,
+    indoc! {r#"
+        color "Red"
+        color "Blue"
+    "#},
     vec![Color::Red, Color::Blue]
 );
 
 deser_repeated_vec!(
-    node_content_multi_arg_as_seq, coords: Vec<Vec<f64>>,
-    "coords 1.0 2.0 3.0\ncoords 4.0 5.0 6.0\n",
+    node_content_multi_arg_as_seq,
+    coords: Vec<Vec<f64>>,
+    indoc! {"
+        coords 1.0 2.0 3.0
+        coords 4.0 5.0 6.0
+    "},
     vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]
 );
 
 deser_repeated_vec!(
-    node_content_bytes_in_seq, data: Vec<Vec<u8>>,
-    "data 1 2 3\ndata 4 5 6\n",
+    node_content_bytes_in_seq,
+    data: Vec<Vec<u8>>,
+    indoc! {"
+        data 1 2 3
+        data 4 5 6
+    "},
     vec![vec![1u8, 2, 3], vec![4, 5, 6]]
 );
 
 deser_repeated_vec!(
-    node_content_dash_children_in_seq, group: Vec<Vec<i32>>,
-    "group {\n    - 1\n    - 2\n}\ngroup {\n    - 3\n    - 4\n}\n",
+    node_content_dash_children_in_seq,
+    group: Vec<Vec<i32>>,
+    indoc! {"
+        group {
+            - 1
+            - 2
+        }
+        group {
+            - 3
+            - 4
+        }
+    "},
     vec![vec![1, 2], vec![3, 4]]
 );
 
 deser_repeated_vec!(
-    node_content_non_dash_children_seq, group: Vec<Vec<i32>>,
-    "group {\n    item 1\n    item 2\n}\ngroup {\n    item 3\n}\n",
+    node_content_non_dash_children_seq,
+    group: Vec<Vec<i32>>,
+    indoc! {"
+        group {
+            item 1
+            item 2
+        }
+        group {
+            item 3
+        }
+    "},
     vec![vec![1, 2], vec![3]]
 );
 
 deser_repeated_vec!(
-    node_content_seq_empty_children_fallthrough, vals: Vec<Vec<i32>>,
-    "vals 1 2 3\nvals 4 5 6\n",
+    node_content_seq_empty_children_fallthrough,
+    vals: Vec<Vec<i32>>,
+    indoc! {"
+        vals 1 2 3
+        vals 4 5 6
+    "},
     vec![vec![1, 2, 3], vec![4, 5, 6]]
 );
 
 deser_repeated_vec!(
-    node_content_seq_args_fallthrough_empty_children, vals: Vec<Vec<i32>>,
-    "vals {\n}\nvals {\n}\n",
+    node_content_seq_args_fallthrough_empty_children,
+    vals: Vec<Vec<i32>>,
+    indoc! {"
+        vals {
+        }
+        vals {
+        }
+    "},
     vec![Vec::<i32>::new(), Vec::<i32>::new()]
 );
 
@@ -1546,7 +1927,11 @@ fn node_content_newtype_in_seq() {
     struct S {
         dist: Vec<Meters>,
     }
-    let val: S = serde_kdl2::from_str("dist 1.0\ndist 2.0\n").unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {"
+        dist 1.0
+        dist 2.0
+    "})
+    .unwrap();
     assert_eq!(val.dist, vec![Meters(1.0), Meters(2.0)]);
 }
 
@@ -1558,7 +1943,11 @@ fn node_content_tuple_struct_in_seq() {
     struct S {
         pair: Vec<Pair>,
     }
-    let val: S = serde_kdl2::from_str("pair 1.0 2.0\npair 3.0 4.0\n").unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {"
+        pair 1.0 2.0
+        pair 3.0 4.0
+    "})
+    .unwrap();
     assert_eq!(val.pair, vec![Pair(1.0, 2.0), Pair(3.0, 4.0)]);
 }
 
@@ -1570,7 +1959,11 @@ fn node_content_unit_struct_in_seq() {
     struct S {
         tag: Vec<Marker>,
     }
-    let val: S = serde_kdl2::from_str("tag\ntag\n").unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {"
+        tag
+        tag
+    "})
+    .unwrap();
     assert_eq!(val.tag, vec![Marker, Marker]);
 }
 
@@ -1587,7 +1980,11 @@ fn node_content_struct_from_properties_in_seq() {
     struct S {
         point: Vec<Point>,
     }
-    let val: S = serde_kdl2::from_str("point x=1.0 y=2.0\npoint x=3.0 y=4.0\n").unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {"
+        point x=1.0 y=2.0
+        point x=3.0 y=4.0
+    "})
+    .unwrap();
     assert_eq!(
         val.point,
         vec![Point { x: 1.0, y: 2.0 }, Point { x: 3.0, y: 4.0 }]
@@ -1604,7 +2001,11 @@ fn node_content_single_arg_struct_in_seq() {
     struct S {
         item: Vec<W>,
     }
-    let val: S = serde_kdl2::from_str("item 10\nitem 20\n").unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {"
+        item 10
+        item 20
+    "})
+    .unwrap();
     assert_eq!(val.item, vec![W { value: 10 }, W { value: 20 }]);
 }
 
@@ -1621,7 +2022,11 @@ fn node_content_struct_empty_node_in_seq() {
     struct S {
         item: Vec<Item>,
     }
-    let val: S = serde_kdl2::from_str("item\nitem\n").unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {"
+        item
+        item
+    "})
+    .unwrap();
     assert_eq!(
         val.item,
         vec![Item { a: None, b: None }, Item { a: None, b: None }]
@@ -1636,7 +2041,11 @@ fn node_content_map_from_properties_in_seq() {
     struct S {
         entry: Vec<HashMap<String, String>>,
     }
-    let val: S = serde_kdl2::from_str("entry a=\"1\" b=\"2\"\nentry c=\"3\"\n").unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {r#"
+        entry a="1" b="2"
+        entry c="3"
+    "#})
+    .unwrap();
     assert_eq!(val.entry.len(), 2);
     assert_eq!(val.entry[0].get("a"), Some(&"1".into()));
 }
@@ -1647,9 +2056,16 @@ fn node_content_map_from_children() {
     struct S {
         entry: Vec<HashMap<String, String>>,
     }
-    let val: S =
-        serde_kdl2::from_str("entry {\n    a \"1\"\n    b \"2\"\n}\nentry {\n    c \"3\"\n}\n")
-            .unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {r#"
+        entry {
+            a "1"
+            b "2"
+        }
+        entry {
+            c "3"
+        }
+    "#})
+    .unwrap();
     assert_eq!(val.entry[0].get("a"), Some(&"1".into()));
     assert_eq!(val.entry[1].get("c"), Some(&"3".into()));
 }
@@ -1660,7 +2076,11 @@ fn node_content_map_from_props_no_children() {
     struct S {
         entry: Vec<HashMap<String, String>>,
     }
-    let val: S = serde_kdl2::from_str("entry a=\"1\" b=\"2\"\nentry c=\"3\"\n").unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {r#"
+        entry a="1" b="2"
+        entry c="3"
+    "#})
+    .unwrap();
     assert_eq!(val.entry[0].get("a"), Some(&"1".into()));
     assert_eq!(val.entry[1].get("c"), Some(&"3".into()));
 }
@@ -1673,9 +2093,20 @@ fn node_content_complex_enum_in_seq() {
     struct S {
         shape: Vec<Shape>,
     }
-    let val: S = serde_kdl2::from_str(
-        "shape {\n    Circle {\n        radius 5.0\n    }\n}\nshape {\n    Rectangle {\n        width 10.0\n        height 20.0\n    }\n}\n"
-    ).unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {"
+        shape {
+            Circle {
+                radius 5.0
+            }
+        }
+        shape {
+            Rectangle {
+                width 10.0
+                height 20.0
+            }
+        }
+    "})
+    .unwrap();
     assert_eq!(val.shape[0], Shape::Circle { radius: 5.0 });
     assert_eq!(
         val.shape[1],
@@ -1698,7 +2129,17 @@ fn node_content_ignored_any() {
     struct S {
         item: Vec<Item>,
     }
-    let val: S = serde_kdl2::from_str("item {\n    name \"test\"\n    extra \"ignored\"\n}\nitem {\n    name \"test2\"\n    bonus 99\n}\n").unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {r#"
+        item {
+            name "test"
+            extra "ignored"
+        }
+        item {
+            name "test2"
+            bonus 99
+        }
+    "#})
+    .unwrap();
     assert_eq!(val.item.len(), 2);
     assert_eq!(val.item[0].name, "test");
 }
@@ -1711,22 +2152,37 @@ fn node_content_with_children() {
     struct S {
         server: Vec<Server>,
     }
-    let val: S = serde_kdl2::from_str(
-        "server {\n    host \"a\"\n    port 1\n}\nserver {\n    host \"b\"\n    port 2\n}\n",
-    )
+    let val: S = serde_kdl2::from_str(indoc! {r#"
+        server {
+            host "a"
+            port 1
+        }
+        server {
+            host "b"
+            port 2
+        }
+    "#})
     .unwrap();
     assert_eq!(val.server.len(), 2);
 }
 
 deser_repeated_vec!(
-    node_content_identifier_in_enum_seq, color: Vec<Color>,
-    "color \"Red\"\ncolor \"Green\"\n",
+    node_content_identifier_in_enum_seq,
+    color: Vec<Color>,
+    indoc! {r#"
+        color "Red"
+        color "Green"
+    "#},
     vec![Color::Red, Color::Green]
 );
 
 deser_repeated_vec!(
-    node_content_string_in_repeated_nodes, val: Vec<String>,
-    "val \"hello\"\nval \"world\"\n",
+    node_content_string_in_repeated_nodes,
+    val: Vec<String>,
+    indoc! {r#"
+        val "hello"
+        val "world"
+    "#},
     vec![String::from("hello"), String::from("world")]
 );
 
@@ -1737,18 +2193,77 @@ deser_repeated_vec!(
 // arguments deserialized into Vec<T>.
 // ════════════════════════════════════════════════════════════════════════
 
-deser_field!(args_seq_bool_values,   flags: Vec<bool>,   "flags #true #false #true",   vec![true, false, true]);
-deser_field!(args_seq_string_values, names: Vec<String>, r#"names "Alice" "Bob""#,      vec![String::from("Alice"), String::from("Bob")]);
-deser_field!(args_seq_char_values,   letters: Vec<char>, r#"letters "A" "B" "C""#,      vec!['A', 'B', 'C']);
-deser_field!(args_seq_i128_values,   vals: Vec<i128>,    "vals 100 200 300",            vec![100i128, 200, 300]);
-deser_field!(args_seq_u128_values,   vals: Vec<u128>,    "vals 100 200 300",            vec![100u128, 200, 300]);
-deser_field!(args_seq_f32_values,    vals: Vec<f32>,     "vals 1.5 2.5 3.5",            vec![1.5f32, 2.5, 3.5]);
-deser_field!(args_seq_f64_values,    vals: Vec<f64>,     "vals 1.5 2.5 3.5",            vec![1.5f64, 2.5, 3.5]);
-deser_field!(args_seq_enum_values,   colors: Vec<Color>, r#"colors "Red" "Blue" "Green""#, vec![Color::Red, Color::Blue, Color::Green]);
-deser_field!(args_seq_option_with_null, vals: Vec<Option<String>>, r#"vals "hello" #null "world""#, vec![Some(String::from("hello")), None, Some(String::from("world"))]);
-deser_field!(value_deserializer_bytes_from_string, data: Vec<u8>, "data 104 101 108", vec![104u8, 101, 108]);
+deser_field!(
+    args_seq_bool_values,
+    flags: Vec<bool>,
+    "flags #true #false #true",
+    vec![true, false, true]
+);
+deser_field!(
+    args_seq_string_values,
+    names: Vec<String>,
+    r#"names "Alice" "Bob""#,
+    vec![String::from("Alice"), String::from("Bob")]
+);
+deser_field!(
+    args_seq_char_values,
+    letters: Vec<char>,
+    r#"letters "A" "B" "C""#,
+    vec!['A', 'B', 'C']
+);
+deser_field!(
+    args_seq_i128_values,
+    vals: Vec<i128>,
+    "vals 100 200 300",
+    vec![100i128, 200, 300]
+);
+deser_field!(
+    args_seq_u128_values,
+    vals: Vec<u128>,
+    "vals 100 200 300",
+    vec![100u128, 200, 300]
+);
+deser_field!(
+    args_seq_f32_values,
+    vals: Vec<f32>,
+    "vals 1.5 2.5 3.5",
+    vec![1.5f32, 2.5, 3.5]
+);
+deser_field!(
+    args_seq_f64_values,
+    vals: Vec<f64>,
+    "vals 1.5 2.5 3.5",
+    vec![1.5f64, 2.5, 3.5]
+);
+deser_field!(
+    args_seq_enum_values,
+    colors: Vec<Color>,
+    r#"colors "Red" "Blue" "Green""#,
+    vec![Color::Red, Color::Blue, Color::Green]
+);
+deser_field!(
+    args_seq_option_with_null,
+    vals: Vec<Option<String>>,
+    r#"vals "hello" #null "world""#,
+    vec![
+        Some(String::from("hello")),
+        None,
+        Some(String::from("world"))
+    ]
+);
+deser_field!(
+    value_deserializer_bytes_from_string,
+    data: Vec<u8>,
+    "data 104 101 108",
+    vec![104u8, 101, 108]
+);
 
-deser_field!(value_deserializer_unit_null_in_args, vals: Vec<()>, "vals #null #null", vec![(), ()]);
+deser_field!(
+    value_deserializer_unit_null_in_args,
+    vals: Vec<()>,
+    "vals #null #null",
+    vec![(), ()]
+);
 
 #[test]
 fn args_seq_newtype_values() {
@@ -1909,21 +2424,30 @@ test_custom_seq_bytes_deser!(
 test_custom_seq_bytes_deser!(
     node_content_bytes_custom_deser_in_seq, deserialize_bytes,
     field_type: Vec<Custom>, data,
-    "data 1 2 3\ndata 4 5\n",
+    indoc! {"
+        data 1 2 3
+        data 4 5
+    "},
     vec![Custom(vec![1, 2, 3]), Custom(vec![4, 5])]
 );
 
 test_custom_seq_bytes_deser!(
     node_content_byte_buf_custom_deser_in_seq, deserialize_byte_buf,
     field_type: Vec<Custom>, data,
-    "data 1 2 3\ndata 4 5\n",
+    indoc! {"
+        data 1 2 3
+        data 4 5
+    "},
     vec![Custom(vec![1, 2, 3]), Custom(vec![4, 5])]
 );
 
 test_custom_str_deser!(
     node_content_str_custom_deser_in_seq, deserialize_str,
     field_type: Vec<Custom>, name,
-    "name \"hello\"\nname \"world\"\n",
+    indoc! {r#"
+        name "hello"
+        name "world"
+    "#},
     vec![Custom(String::from("hello")), Custom(String::from("world"))]
 );
 
@@ -2027,7 +2551,14 @@ fn field_deserialize_seq_dash_filter_over_non_dash() {
     struct S {
         items: Vec<i32>,
     }
-    let val: S = serde_kdl2::from_str("items {\n    - 10\n    - 20\n    extra 99\n}\n").unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {"
+        items {
+            - 10
+            - 20
+            extra 99
+        }
+    "})
+    .unwrap();
     assert_eq!(val.items, vec![10, 20]);
 }
 
@@ -2063,9 +2594,16 @@ fn node_content_seq_dash_filter_over_non_dash() {
     struct S {
         group: Vec<Vec<i32>>,
     }
-    let val: S = serde_kdl2::from_str(
-        "group {\n    - 10\n    - 20\n    extra 99\n}\ngroup {\n    - 30\n}\n",
-    )
+    let val: S = serde_kdl2::from_str(indoc! {"
+        group {
+            - 10
+            - 20
+            extra 99
+        }
+        group {
+            - 30
+        }
+    "})
     .unwrap();
     assert_eq!(val.group, vec![vec![10, 20], vec![30]]);
 }
@@ -2087,7 +2625,11 @@ fn node_content_struct_multi_field_single_arg_falls_through() {
     struct S {
         item: Vec<Multi>,
     }
-    let val: S = serde_kdl2::from_str("item 42\nitem 99\n").unwrap();
+    let val: S = serde_kdl2::from_str(indoc! {"
+        item 42
+        item 99
+    "})
+    .unwrap();
     assert_eq!(
         val.item,
         vec![Multi { a: None, b: None }, Multi { a: None, b: None }]
@@ -2101,6 +2643,7 @@ fn node_content_struct_multi_field_single_arg_falls_through() {
 fn enum_newtype_variant_missing_value_errors() {
     #[derive(Deserialize, Debug)]
     enum Val {
+        #[allow(dead_code)]
         Wrap(String),
     }
     #[derive(Deserialize, Debug)]
