@@ -163,13 +163,8 @@ let doc: kdl::KdlDocument = serde_kdl2::to_doc(&config)?;
 
 ## Releasing
 
-Releases use [cargo-release](https://github.com/crates-io/cargo-release).
-Run one of the following locally:
-
 ```sh
-cargo release patch  # 0.1.0 → 0.1.1
-cargo release minor  # 0.1.0 → 0.2.0
-cargo release major  # 0.1.0 → 1.0.0
+just release X.Y.Z
 ```
 
 This bumps the version in `Cargo.toml`, commits, tags, and pushes. GitHub

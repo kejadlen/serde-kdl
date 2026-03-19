@@ -53,4 +53,23 @@ mutants:
     fi
     exit "$rc"
 
+release version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! echo "{{ version }}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
+        echo "Usage: just release X.Y.Z[-pre]"
+        exit 1
+    fi
+    if ! jj diff --quiet; then
+        echo "Error: working copy has uncommitted changes"
+        exit 1
+    fi
+    sed -i '' 's/^version = ".*"/version = "{{ version }}"/' Cargo.toml
+    cargo check --quiet
+    jj commit -m 'Release {{ version }}'
+    jj bookmark set main -r @-
+    jj git push --remote origin -b main
+    git -C "$(jj git root)" tag "v{{ version }}" "$(jj log -r @- --no-graph -T 'commit_id')"
+    git -C "$(jj git root)" push origin "v{{ version }}"
+
 all: fmt clippy coverage
