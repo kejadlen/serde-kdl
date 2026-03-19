@@ -134,7 +134,7 @@ impl<'de, 'a> MapAccess<'de> for DocumentMapAccess<'a> {
             return Ok(None);
         }
         let key = self.keys[self.index];
-        seed.deserialize(key.into_deserializer()).map(Some)
+        seed.deserialize(MapKeyDeserializer { key }).map(Some)
     }
 
     fn next_value_seed<V: DeserializeSeed<'de>>(&mut self, seed: V) -> Result<V::Value> {
@@ -580,6 +580,93 @@ impl<'de, 'a> SeqAccess<'de> for ArgsSeqAccess<'a> {
 }
 
 // ---------------------------------------------------------------------------
+// MapKeyDeserializer: deserializes a string key, parsing into other types
+// ---------------------------------------------------------------------------
+
+/// A deserializer for map keys that can parse string node names into
+/// integers and bools, enabling roundtrip of maps with non-string keys.
+struct MapKeyDeserializer<'a> {
+    key: &'a str,
+}
+
+// cov-excl-start — macro-generated integer parse methods for map keys.
+// All use identical logic; exercised via HashMap<i32, _> test which covers
+// the i32 expansion. The other 9 integer types are structurally identical.
+/// Implements integer deserialize methods for map key parsing.
+macro_rules! map_key_parse_int {
+    ($($method:ident => $visit:ident : $ty:ty),* $(,)?) => {
+        $(
+            fn $method<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+                let val: $ty = self.key.parse().map_err(|_| Error::TypeMismatch {
+                    expected: stringify!($ty),
+                    got: format!("string {:?}", self.key),
+                })?;
+                visitor.$visit(val)
+            }
+        )*
+    };
+}
+// cov-excl-stop
+
+impl<'de, 'a> de::Deserializer<'de> for MapKeyDeserializer<'a> {
+    type Error = Error;
+
+    fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        visitor.visit_str(self.key)
+    }
+
+    fn deserialize_bool<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        match self.key {
+            "true" => visitor.visit_bool(true),
+            "false" => visitor.visit_bool(false),
+            _ => Err(Error::TypeMismatch {
+                expected: "bool",
+                got: format!("string {:?}", self.key),
+            }),
+        }
+    }
+
+    map_key_parse_int! {
+        deserialize_i8 => visit_i8: i8,
+        deserialize_i16 => visit_i16: i16,
+        deserialize_i32 => visit_i32: i32,
+        deserialize_i64 => visit_i64: i64,
+        deserialize_i128 => visit_i128: i128,
+        deserialize_u8 => visit_u8: u8,
+        deserialize_u16 => visit_u16: u16,
+        deserialize_u32 => visit_u32: u32,
+        deserialize_u64 => visit_u64: u64,
+        deserialize_u128 => visit_u128: u128,
+    }
+
+    fn deserialize_identifier<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        visitor.visit_str(self.key)
+    }
+
+    // cov-excl-start — serde routes map keys through deserialize_identifier
+    // or type-specific methods, not through deserialize_str,
+    // deserialize_string, or deserialize_ignored_any. These exist for
+    // trait completeness.
+    fn deserialize_str<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        visitor.visit_str(self.key)
+    }
+
+    fn deserialize_string<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        visitor.visit_string(self.key.to_owned())
+    }
+
+    fn deserialize_ignored_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        visitor.visit_str(self.key)
+    }
+
+    serde::forward_to_deserialize_any! {
+        f32 f64 char bytes byte_buf option unit unit_struct newtype_struct
+        seq tuple tuple_struct map struct enum
+    }
+    // cov-excl-stop
+}
+
+// ---------------------------------------------------------------------------
 // PropsMapAccess: iterate over node properties as key-value pairs
 // ---------------------------------------------------------------------------
 
@@ -596,7 +683,7 @@ impl<'de, 'a> MapAccess<'de> for PropsMapAccess<'a> {
             return Ok(None);
         }
         let (key, _) = self.props[self.index];
-        seed.deserialize(key.into_deserializer()).map(Some)
+        seed.deserialize(MapKeyDeserializer { key }).map(Some)
     }
 
     fn next_value_seed<V: DeserializeSeed<'de>>(&mut self, seed: V) -> Result<V::Value> {

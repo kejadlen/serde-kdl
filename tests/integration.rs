@@ -855,27 +855,52 @@ fn serialize_f32_field() {
 }
 
 #[test]
-fn serialize_map_integer_keys() {
-    #[derive(Debug, Serialize)]
+fn roundtrip_map_integer_keys() {
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
     struct S {
         lookup: HashMap<i32, String>,
     }
     let mut lookup = HashMap::new();
     lookup.insert(1, "one".into());
-    let output = serde_kdl2::to_string(&S { lookup }).unwrap();
+    lookup.insert(2, "two".into());
+    let val = S { lookup };
+    let output = serde_kdl2::to_string(&val).unwrap();
     assert!(output.contains("1"));
+    let rt: S = serde_kdl2::from_str(&output).unwrap();
+    assert_eq!(val, rt);
 }
 
 #[test]
-fn serialize_map_bool_keys() {
-    #[derive(Debug, Serialize)]
+fn roundtrip_map_bool_keys() {
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
     struct S {
         flags: HashMap<bool, String>,
     }
     let mut flags = HashMap::new();
     flags.insert(true, "yes".into());
-    let output = serde_kdl2::to_string(&S { flags }).unwrap();
+    flags.insert(false, "no".into());
+    let val = S { flags };
+    let output = serde_kdl2::to_string(&val).unwrap();
     assert!(output.contains("true"));
+    let rt: S = serde_kdl2::from_str(&output).unwrap();
+    assert_eq!(val, rt);
+}
+
+#[test]
+fn deserialize_map_bool_key_invalid() {
+    #[derive(Debug, Deserialize)]
+    struct S {
+        #[allow(dead_code)]
+        flags: HashMap<bool, String>,
+    }
+    assert!(
+        serde_kdl2::from_str::<S>(indoc! {r#"
+        flags {
+            maybe "value"
+        }
+    "#})
+        .is_err()
+    );
 }
 
 #[test]
