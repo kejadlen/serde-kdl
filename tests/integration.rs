@@ -814,29 +814,38 @@ fn serialize_bytes() {
 }
 
 #[test]
-fn serialize_unit_value() {
+fn roundtrip_unit_field() {
     #[derive(Debug, Serialize, Deserialize, PartialEq)]
     struct S {
         label: String,
-        #[allow(dead_code)]
         marker: (),
     }
-    let output = serde_kdl2::to_string(&S {
+    let val = S {
         label: String::from("test"),
         marker: (),
-    })
-    .unwrap();
+    };
+    let output = serde_kdl2::to_string(&val).unwrap();
     assert!(output.contains("label"));
+    assert!(output.contains("marker"));
+    let rt: S = serde_kdl2::from_str(&output).unwrap();
+    assert_eq!(val, rt);
 }
 
 #[test]
-fn serialize_explicit_null_value() {
-    #[derive(Serialize)]
+fn roundtrip_unit_struct_field() {
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
     struct S {
+        label: String,
         marker: UnitStruct,
     }
-    let output = serde_kdl2::to_string(&S { marker: UnitStruct }).unwrap();
-    assert!(!output.contains("marker"));
+    let val = S {
+        label: String::from("test"),
+        marker: UnitStruct,
+    };
+    let output = serde_kdl2::to_string(&val).unwrap();
+    assert!(output.contains("marker"));
+    let rt: S = serde_kdl2::from_str(&output).unwrap();
+    assert_eq!(val, rt);
 }
 
 #[test]

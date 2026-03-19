@@ -44,6 +44,9 @@ pub fn to_doc<T: Serialize>(value: &T) -> Result<KdlDocument> {
 /// tree structure. We serialize into this first, then convert to KDL.
 #[derive(Debug, Clone)]
 enum Value {
+    /// Represents `Option::None` — the field should be omitted entirely.
+    None,
+    /// Represents `()` and unit structs — serializes as `#null`.
     Null,
     Bool(bool),
     Integer(i128),
@@ -57,12 +60,18 @@ impl Value {
     fn is_primitive(&self) -> bool {
         matches!(
             self,
-            Value::Null | Value::Bool(_) | Value::Integer(_) | Value::Float(_) | Value::String(_)
+            Value::None
+                | Value::Null
+                | Value::Bool(_)
+                | Value::Integer(_)
+                | Value::Float(_)
+                | Value::String(_)
         )
     }
 
     fn to_kdl_value(&self) -> Option<KdlValue> {
         match self {
+            Value::None => Some(KdlValue::Null),
             Value::Null => Some(KdlValue::Null),
             Value::Bool(b) => Some(KdlValue::Bool(*b)),
             Value::Integer(i) => Some(KdlValue::Integer(*i)),
@@ -96,9 +105,9 @@ fn value_to_doc(value: Value) -> Result<KdlDocument> {
 /// Convert a key-value pair to one or more KDL nodes.
 fn value_to_nodes(name: &str, value: Value) -> Result<Vec<KdlNode>> {
     match value {
-        // Null reaches value_to_nodes through the mixed-sequence `-`
+        // None/Null reach value_to_nodes through the mixed-sequence `-`
         // children path (e.g., Vec<Option<Vec<T>>> with a None element).
-        Value::Null => {
+        Value::None | Value::Null => {
             let mut node = KdlNode::new(name);
             node.push(KdlEntry::new(KdlValue::Null));
             Ok(vec![node])
@@ -285,7 +294,7 @@ impl ser::Serializer for ValueSerializer {
     }
 
     fn serialize_none(self) -> Result<Value> {
-        Ok(Value::Null)
+        Ok(Value::None)
     }
 
     fn serialize_some<T: ?Sized + Serialize>(self, value: &T) -> Result<Value> {
@@ -481,8 +490,8 @@ impl ser::SerializeMap for SerializeMap {
             .take()
             .ok_or_else(|| Error::Message("serialize_value called before serialize_key".into()))?;
         let val = value.serialize(ValueSerializer)?;
-        // Skip None/Null values (they represent absent optional fields)
-        if !matches!(val, Value::Null) {
+        // Skip None values (they represent absent optional fields)
+        if !matches!(val, Value::None) {
             self.entries.push((key, val));
         }
         Ok(())
@@ -503,8 +512,8 @@ impl ser::SerializeStruct for SerializeMap {
         value: &T,
     ) -> Result<()> {
         let val = value.serialize(ValueSerializer)?;
-        // Skip None/Null values for struct fields (Option::None)
-        if !matches!(val, Value::Null) {
+        // Skip None values for struct fields (Option::None)
+        if !matches!(val, Value::None) {
             self.entries.push((key.to_string(), val));
         }
         Ok(())
@@ -530,7 +539,7 @@ impl ser::SerializeStructVariant for SerializeStructVariant {
         value: &T,
     ) -> Result<()> {
         let val = value.serialize(ValueSerializer)?;
-        if !matches!(val, Value::Null) {
+        if !matches!(val, Value::None) {
             self.entries.push((key.to_string(), val));
         }
         Ok(())
