@@ -957,6 +957,21 @@ fn serialize_vec_option_with_nulls() {
 }
 
 #[test]
+fn serialize_vec_unit() {
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    struct S {
+        markers: Vec<()>,
+    }
+    let val = S {
+        markers: vec![(), ()],
+    };
+    let output = serde_kdl2::to_string(&val).unwrap();
+    assert!(output.contains("#null"));
+    let rt: S = serde_kdl2::from_str(&output).unwrap();
+    assert_eq!(val, rt);
+}
+
+#[test]
 fn serialize_mixed_seq_with_null() {
     #[derive(Serialize, Debug)]
     struct S {

@@ -60,18 +60,12 @@ impl Value {
     fn is_primitive(&self) -> bool {
         matches!(
             self,
-            Value::None
-                | Value::Null
-                | Value::Bool(_)
-                | Value::Integer(_)
-                | Value::Float(_)
-                | Value::String(_)
+            Value::Null | Value::Bool(_) | Value::Integer(_) | Value::Float(_) | Value::String(_)
         )
     }
 
     fn to_kdl_value(&self) -> Option<KdlValue> {
         match self {
-            Value::None => Some(KdlValue::Null),
             Value::Null => Some(KdlValue::Null),
             Value::Bool(b) => Some(KdlValue::Bool(*b)),
             Value::Integer(i) => Some(KdlValue::Integer(*i)),
