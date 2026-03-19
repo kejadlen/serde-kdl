@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "Serde integration for KDL (KDL Document Language)"
 license = "MIT"
-repository = "https://github.com/kdl-org/kdl-rs"
+repository = "https://git.kejadlen.dev/alpha/serde-kdl2"
 keywords = ["kdl", "serde", "serialization", "config"]
 categories = ["config", "encoding"]
 

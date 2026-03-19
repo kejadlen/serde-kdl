@@ -48,8 +48,8 @@ GitHub Actions runs on push to main and on PRs:
 2. `just clippy coverage`
 3. `just mutants`
 
-Release workflow tags calver versions on successful CI runs against main.
-Crates.io publishing is configured but currently commented out.
+Release uses `cargo release` (manual, semver). Pushing a `v*` tag triggers
+the release workflow, which publishes to crates.io and creates a GitHub release.
 
 ## Mapping Rules
 
