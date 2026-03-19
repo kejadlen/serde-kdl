@@ -902,7 +902,16 @@ impl<'a> ValueDeserializer<'a> {
     fn to_i128(&self) -> Result<i128> {
         match self.value {
             KdlValue::Integer(i) => Ok(*i),
-            KdlValue::Float(f) => Ok(*f as i128),
+            KdlValue::Float(f) => {
+                if f.is_finite() && f.fract() == 0.0 {
+                    Ok(*f as i128)
+                } else {
+                    Err(Error::TypeMismatch {
+                        expected: "integer (float has fractional part or is non-finite)",
+                        got: format!("{f}"),
+                    })
+                }
+            }
             other => Err(Error::TypeMismatch {
                 expected: "integer",
                 got: format!("{other:?}"),

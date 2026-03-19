@@ -1082,6 +1082,8 @@ fn field_deserialize_enum_multi_children_error() {
 deser_field!(deserialize_f32_from_integer, value: f32, "value 3", 3.0f32);
 deser_field!(deserialize_f64_from_integer, value: f64, "value 42", 42.0f64);
 deser_field!(deserialize_int_from_float, count: i32, "count 3.0", 3);
+deser_field_err!(deserialize_int_from_fractional_float, count: i32, "count 3.7");
+deser_field_err!(deserialize_int_from_negative_frac, count: i32, "count -1.5");
 deser_field!(value_deserializer_any_integer, val: i128, "val 42", 42i128);
 deser_field!(value_deserializer_any_bool, val: bool, "val #true", true);
 deser_field!(value_deserializer_null_option, optional: Option<i32>, "optional #null", None);
