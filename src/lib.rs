@@ -355,30 +355,29 @@ macro_rules! bare_default {
             D: serde::Deserializer<'de>,
         {
             use serde::de::{self, Visitor};
-            
+
             struct BareDefaultVisitor;
-            
+
             impl<'de> Visitor<'de> for BareDefaultVisitor {
                 type Value = $ty;
-                
+
                 fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                     write!(formatter, "a value or bare node name")
                 }
-                
+
                 fn visit_unit<E>(self) -> Result<Self::Value, E>
                 where
                     E: de::Error,
                 {
                     Ok($bare_val)
                 }
-                
+
                 // Note: This simplified version only handles visit_unit
                 // For full type support, you'd need to add the appropriate
                 // visit_* methods for your specific type
             }
-            
+
             deserializer.deserialize_any(BareDefaultVisitor)
         }
-    };
-    // cov-excl-stop
+    }; // cov-excl-stop
 }

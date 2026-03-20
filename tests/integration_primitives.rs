@@ -217,7 +217,7 @@ fn macro_generated_deserializer_error_handling() {
         #[serde(default, deserialize_with = "error_test_deser")]
         flag: bool,
     }
-    
+
     // Test that invalid types produce errors
     let result: Result<W, _> = serde_kdl2::from_str(r#"flag "not_a_bool""#);
     assert!(result.is_err());
@@ -230,15 +230,15 @@ fn macro_generic_type_support() {
         #[serde(default, deserialize_with = "string_test_deser")]
         name: String,
     }
-    
+
     // Test bare node gets default
     let val: W = serde_kdl2::from_str("name").unwrap();
     assert_eq!(val.name, "default");
-    
+
     // Test missing field gets default (from serde's default)
     let val: W = serde_kdl2::from_str("").unwrap();
     assert_eq!(val.name, "");
-    
+
     // Test that non-unit values cause errors (to trigger expecting method)
     let result: Result<W, _> = serde_kdl2::from_str(r#"name 123"#);
     assert!(result.is_err());
@@ -255,8 +255,6 @@ fn boolean_defaults_type_error() {
     let result: Result<W, _> = serde_kdl2::from_str(r#"flag "not_a_bool""#);
     assert!(result.is_err());
 }
-
-
 
 // ── Custom Boolean Defaults with Macro ─────────────────────────────────
 
