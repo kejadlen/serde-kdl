@@ -80,19 +80,20 @@ where
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct Config {
     #[serde(deserialize_with = "serde_kdl2::bare_defaults::bool::bare_true")]
     enabled: bool,
-    
+
     #[serde(deserialize_with = "serde_kdl2::bare_defaults::bool::bare_false")]
     debug: bool,
-    
+
     #[serde(deserialize_with = "retry_count_default")]
     retry_count: i32,
-    
+
     #[serde(deserialize_with = "name_default")]
     username: String,
-    
+
     // Regular field (requires explicit value)
     port: u16,
 }
@@ -105,9 +106,9 @@ fn main() {
         username         // defaults to "unknown"
         port 8080        // explicit value required
     "#;
-    
+
     let config: Config = serde_kdl2::from_str(kdl_input).unwrap();
-    
+
     println!("{:#?}", config);
     // Output:
     // Config {
@@ -117,7 +118,7 @@ fn main() {
     //     username: "unknown",     // from custom default
     //     port: 8080,             // from explicit value
     // }
-    
+
     // You can still override the defaults with explicit values
     let kdl_override = r#"
         enabled #false      // overrides bare_true default
@@ -126,7 +127,7 @@ fn main() {
         username "alice"    // overrides default
         port 3000
     "#;
-    
+
     let config2: Config = serde_kdl2::from_str(kdl_override).unwrap();
     println!("{:#?}", config2);
     // Output:

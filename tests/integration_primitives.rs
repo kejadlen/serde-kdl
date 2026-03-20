@@ -123,7 +123,7 @@ roundtrip!(
 struct BooleanDefaults {
     #[serde(deserialize_with = "serde_kdl2::bare_defaults::bool::bare_true")]
     enabled: bool,
-    
+
     #[serde(deserialize_with = "serde_kdl2::bare_defaults::bool::bare_false")]
     disabled: bool,
 }
@@ -151,8 +151,8 @@ deser_ok!(
         disabled #true
     "},
     BooleanDefaults {
-        enabled: false,  // overrides bare_true default
-        disabled: true,  // overrides bare_false default
+        enabled: false, // overrides bare_true default
+        disabled: true, // overrides bare_false default
     }
 );
 
@@ -204,6 +204,18 @@ fn boolean_defaults_explicit_false_with_bare_true() {
     }
     let val: W = serde_kdl2::from_str("flag #false").unwrap();
     assert_eq!(val.flag, false);
+}
+
+// Test error case - invalid type for boolean defaults
+#[test]
+fn boolean_defaults_type_error() {
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct W {
+        #[serde(deserialize_with = "serde_kdl2::bare_defaults::bool::bare_true")]
+        flag: bool,
+    }
+    let result: Result<W, _> = serde_kdl2::from_str(r#"flag "not_a_bool""#);
+    assert!(result.is_err());
 }
 
 // ── Characters ──────────────────────────────────────────────────────────

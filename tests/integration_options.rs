@@ -74,7 +74,10 @@ fn serialize_option() {
         optional: None,
     };
     let output = serde_kdl2::to_string(&without).unwrap();
-    assert!(!output.contains("optional"), "None options should not serialize");
+    assert!(
+        !output.contains("optional"),
+        "None options should not serialize"
+    );
     let rt: OptionalFields = serde_kdl2::from_str(&output).unwrap();
     assert_eq!(without, rt);
 }

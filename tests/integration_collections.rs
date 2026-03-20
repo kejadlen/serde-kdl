@@ -1,8 +1,8 @@
 //! Integration tests for collection types (Vec, HashMap, etc.).
 
 use indoc::indoc;
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 // Test macros
 macro_rules! deser_ok {

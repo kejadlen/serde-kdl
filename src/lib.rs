@@ -152,18 +152,18 @@ pub use ser::{to_doc, to_string, to_string_pretty};
 
 /// Serde helpers for custom defaults with bare node names.
 pub mod bare_defaults {
-    use serde::{de, Deserializer};
+    use serde::{Deserializer, de};
 
     /// Boolean-specific bare default deserializers.
     pub mod bool {
         use super::*;
 
         /// Deserializes a boolean field where bare node names default to `true`.
-        /// 
+        ///
         /// Use with `#[serde(deserialize_with = "serde_kdl2::bare_defaults::bool::bare_true")]`.
-        /// 
+        ///
         /// # Examples
-        /// 
+        ///
         /// ```kdl
         /// enabled        // → true
         /// enabled #true  // → true
@@ -177,11 +177,11 @@ pub mod bare_defaults {
         }
 
         /// Deserializes a boolean field where bare node names default to `false`.
-        /// 
+        ///
         /// Use with `#[serde(deserialize_with = "serde_kdl2::bare_defaults::bool::bare_false")]`.
-        /// 
+        ///
         /// # Examples
-        /// 
+        ///
         /// ```kdl
         /// disabled        // → false
         /// disabled #true  // → true
@@ -234,5 +234,3 @@ pub mod bare_defaults {
     // For other types, users can create custom deserializer functions following
     // the pattern demonstrated in the bool module above.
 }
-
-
