@@ -49,6 +49,31 @@
 //! enabled #true
 //! ```
 //!
+//! ### Boolean Shorthand
+//!
+//! Boolean fields can use custom defaults for bare node names (without arguments)
+//! using the `deserialize_with` attribute:
+//!
+//! ```rust
+//! use serde::Deserialize;
+//!
+//! #[derive(Deserialize)]
+//! struct Config {
+//!     #[serde(deserialize_with = "serde_kdl2::bool_defaults::bare_true")]
+//!     enabled: bool,
+//!     
+//!     #[serde(deserialize_with = "serde_kdl2::bool_defaults::bare_false")]
+//!     disabled: bool,
+//! }
+//! ```
+//!
+//! ```kdl
+//! enabled          // → true (due to bare_true)
+//! disabled         // → false (due to bare_false)
+//! enabled #false   // → false (explicit value overrides default)
+//! disabled #true   // → true (explicit value overrides default)
+//! ```
+//!
 //! ### Nested Structs
 //!
 //! Nested structs use children blocks:
@@ -121,3 +146,75 @@ pub mod ser;
 pub use de::{from_doc, from_str};
 pub use error::Error;
 pub use ser::{to_doc, to_string, to_string_pretty};
+
+/// Serde helper functions for custom boolean defaults with bare node names.
+pub mod bool_defaults {
+    use serde::{de, Deserializer};
+
+    /// Deserializes a boolean field where bare node names default to `true`.
+    /// 
+    /// Use with `#[serde(deserialize_with = "serde_kdl2::bool_defaults::bare_true")]`.
+    /// 
+    /// # Examples
+    /// 
+    /// ```kdl
+    /// enabled        // → true
+    /// enabled #true  // → true
+    /// enabled #false // → false
+    /// ```
+    pub fn bare_true<'de, D>(deserializer: D) -> Result<bool, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        bare_default::<D, true>(deserializer)
+    }
+
+    /// Deserializes a boolean field where bare node names default to `false`.
+    /// 
+    /// Use with `#[serde(deserialize_with = "serde_kdl2::bool_defaults::bare_false")]`.
+    /// 
+    /// # Examples
+    /// 
+    /// ```kdl
+    /// disabled        // → false
+    /// disabled #true  // → true
+    /// disabled #false // → false
+    /// ```
+    pub fn bare_false<'de, D>(deserializer: D) -> Result<bool, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        bare_default::<D, false>(deserializer)
+    }
+
+    fn bare_default<'de, D, const DEFAULT: bool>(deserializer: D) -> Result<bool, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct BareDefaultVisitor<const DEFAULT: bool>;
+
+        impl<'de, const DEFAULT: bool> de::Visitor<'de> for BareDefaultVisitor<DEFAULT> {
+            type Value = bool;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(formatter, "a boolean value or bare node name")
+            }
+
+            fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(value)
+            }
+
+            fn visit_unit<E>(self) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(DEFAULT)
+            }
+        }
+
+        deserializer.deserialize_any(BareDefaultVisitor::<DEFAULT>)
+    }
+}

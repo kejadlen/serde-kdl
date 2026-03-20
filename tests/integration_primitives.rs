@@ -117,6 +117,95 @@ roundtrip!(
     }
 );
 
+// ── Boolean Defaults ───────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize, PartialEq)]
+struct BooleanDefaults {
+    #[serde(deserialize_with = "serde_kdl2::bool_defaults::bare_true")]
+    enabled: bool,
+    
+    #[serde(deserialize_with = "serde_kdl2::bool_defaults::bare_false")]
+    disabled: bool,
+}
+
+// Test that bare node names use the configured defaults
+deser_ok!(
+    boolean_defaults_bare,
+    BooleanDefaults,
+    indoc! {"
+        enabled
+        disabled
+    "},
+    BooleanDefaults {
+        enabled: true,   // bare_true default
+        disabled: false, // bare_false default
+    }
+);
+
+// Test that explicit values override defaults
+deser_ok!(
+    boolean_defaults_explicit_override,
+    BooleanDefaults,
+    indoc! {"
+        enabled #false
+        disabled #true
+    "},
+    BooleanDefaults {
+        enabled: false,  // overrides bare_true default
+        disabled: true,  // overrides bare_false default
+    }
+);
+
+// Test mixed bare and explicit values
+deser_ok!(
+    boolean_defaults_mixed,
+    BooleanDefaults,
+    indoc! {"
+        enabled
+        disabled #true
+    "},
+    BooleanDefaults {
+        enabled: true,  // bare_true default
+        disabled: true, // explicit value
+    }
+);
+
+// Test single field with bare_true default
+#[test]
+fn boolean_defaults_single_bare_true() {
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct W {
+        #[serde(deserialize_with = "serde_kdl2::bool_defaults::bare_true")]
+        flag: bool,
+    }
+    let val: W = serde_kdl2::from_str("flag").unwrap();
+    assert_eq!(val.flag, true);
+}
+
+// Test single field with bare_false default
+#[test]
+fn boolean_defaults_single_bare_false() {
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct W {
+        #[serde(deserialize_with = "serde_kdl2::bool_defaults::bare_false")]
+        flag: bool,
+    }
+    let val: W = serde_kdl2::from_str("flag").unwrap();
+    assert_eq!(val.flag, false);
+}
+
+// Test that explicit false works with bare_true default
+#[test]
+fn boolean_defaults_explicit_false_with_bare_true() {
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct W {
+        #[serde(deserialize_with = "serde_kdl2::bool_defaults::bare_true")]
+        flag: bool,
+    }
+    let val: W = serde_kdl2::from_str("flag #false").unwrap();
+    assert_eq!(val.flag, false);
+}
+
 // ── Characters ──────────────────────────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
