@@ -14,6 +14,6 @@ serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 
 [dev-dependencies]
+hegeltest = "0.2"
 indoc = "2"
-proptest = "1"
 serde = { version = "1", features = ["derive"] }
