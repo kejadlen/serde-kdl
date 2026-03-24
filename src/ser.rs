@@ -12,10 +12,79 @@
 //! - **Enum (newtype)** → Child node: `VariantName value`.
 //! - **Enum (struct)** → Child node with children: `VariantName { field val }`.
 
-use kdl::{KdlDocument, KdlEntry, KdlNode, KdlValue};
+use kdl::{KdlDocument, KdlEntry, KdlEntryFormat, KdlNode, KdlValue};
 use serde::ser::{self, Serialize};
 
 use crate::error::{Error, Result};
+
+/// Returns true if `c` is a character that the `kdl` crate (v6.5) writes
+/// verbatim but the KDL v2 spec forbids in unescaped form inside quoted
+/// strings.
+///
+/// The kdl crate escapes: `\\`, `"`, `\n` (0x0A), `\r` (0x0D), `\t`
+/// (0x09), `\b` (0x08), `\f` (0x0C). All other C0 controls, DEL, C1
+/// controls, and Unicode newline characters are written raw.
+fn is_unescaped_by_kdl(c: char) -> bool {
+    let cp = c as u32;
+    matches!(
+        cp,
+        // C0 controls not handled by the kdl crate.
+        0x00..=0x07 | 0x0B | 0x0E..=0x1F
+        // DEL.
+        | 0x7F
+        // C1 controls (includes NEL at 0x85).
+        | 0x80..=0x9F
+        // Unicode line/paragraph separators treated as newlines by KDL.
+        | 0x2028..=0x2029
+    )
+}
+
+/// Build a `KdlEntry` for a string value, escaping control characters that
+/// the `kdl` crate's `Display` doesn't handle.
+///
+/// The KDL v2 spec forbids unescaped control characters (U+0000–U+0008,
+/// U+000E–U+001F, U+007F, and others) inside quoted strings. The `kdl`
+/// crate (v6.5) only escapes `\n`, `\r`, `\t`, `\b`, `\f`, `\\`, and `"`,
+/// writing all other characters verbatim. This produces invalid KDL for
+/// strings containing other control characters.
+///
+/// We work around this by setting `value_repr` on the entry to a properly
+/// escaped quoted string.
+fn string_entry(s: &str) -> KdlEntry {
+    let needs_escape = s.chars().any(is_unescaped_by_kdl);
+
+    let mut entry = KdlEntry::new(KdlValue::String(s.to_string()));
+
+    if needs_escape {
+        let mut repr = String::with_capacity(s.len() + 2);
+        repr.push('"');
+        for c in s.chars() {
+            match c {
+                '\\' => repr.push_str("\\\\"),
+                '"' => repr.push_str("\\\""),
+                '\n' => repr.push_str("\\n"),
+                '\r' => repr.push_str("\\r"),
+                '\t' => repr.push_str("\\t"),
+                '\u{08}' => repr.push_str("\\b"),
+                '\u{0C}' => repr.push_str("\\f"),
+                c if is_unescaped_by_kdl(c) => {
+                    repr.push_str(&format!("\\u{{{:x}}}", c as u32));
+                }
+                c => repr.push(c),
+            }
+        }
+        repr.push('"');
+        entry.set_format(KdlEntryFormat {
+            value_repr: repr,
+            leading: " ".into(),
+            // Prevent autoformat() from clearing the escaped repr.
+            autoformat_keep: true,
+            ..Default::default()
+        });
+    }
+
+    entry
+}
 
 /// Serialize a value to a KDL string.
 pub fn to_string<T: Serialize>(value: &T) -> Result<String> {
@@ -70,7 +139,7 @@ impl Value {
             Value::Bool(b) => Some(KdlValue::Bool(*b)),
             Value::Integer(i) => Some(KdlValue::Integer(*i)),
             Value::Float(f) => Some(KdlValue::Float(*f)),
-            Value::String(s) => Some(KdlValue::String(s.clone())),
+            Value::String(_) => unreachable!("strings use string_entry, not to_kdl_value"),
             _ => unreachable!("to_kdl_value is only called on primitive values"),
         }
     }
@@ -123,7 +192,7 @@ fn value_to_nodes(name: &str, value: Value) -> Result<Vec<KdlNode>> {
         }
         Value::String(s) => {
             let mut node = KdlNode::new(name);
-            node.push(KdlEntry::new(KdlValue::String(s)));
+            node.push(string_entry(&s));
             Ok(vec![node])
         }
 
@@ -145,8 +214,13 @@ fn value_to_nodes(name: &str, value: Value) -> Result<Vec<KdlNode>> {
                 // Single node, multiple arguments
                 let mut node = KdlNode::new(name);
                 for elem in &elements {
-                    if let Some(kv) = elem.to_kdl_value() {
-                        node.push(KdlEntry::new(kv));
+                    match elem {
+                        Value::String(s) => node.push(string_entry(s)),
+                        _ => {
+                            if let Some(kv) = elem.to_kdl_value() {
+                                node.push(KdlEntry::new(kv));
+                            }
+                        }
                     }
                 }
                 Ok(vec![node])

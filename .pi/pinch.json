@@ -1,0 +1,7 @@
+{
+  "hegel-skill": {
+    "repo": "https://github.com/hegeldev/hegel-skill",
+    "ref": "main",
+    "plugins": [{"name": "hegel-skill", "path": "."}]
+  }
+}

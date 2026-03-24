@@ -1,19 +1,17 @@
 use hegel::TestCase;
 use hegel::generators::{
-    Generator, booleans, floats, from_regex, integers, optional, sampled_from, vecs,
+    Generator, booleans, floats, from_regex, integers, optional, sampled_from, text, vecs,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-/// Generator for strings that are safe to roundtrip through KDL.
-/// Excludes characters that would break KDL parsing.
-fn kdl_safe_string() -> impl Generator<String> {
-    from_regex("[a-zA-Z0-9 _.,:;!?@#%^&*()+=/<>\\[\\]{}|~'-]{0,64}").fullmatch(true)
-}
-
-/// Generator for f64 values that can roundtrip (no NaN/infinity).
+/// Generator for f64 values that can roundtrip through KDL.
+///
+/// NaN is excluded because `NaN != NaN`, so roundtrip equality assertions
+/// always fail. Infinity is excluded because KDL has no infinity literal —
+/// the serializer would need to encode it as a string, which changes the type.
 fn finite_f64() -> impl Generator<f64> {
     floats::<f64>().allow_nan(false).allow_infinity(false)
 }
@@ -36,7 +34,7 @@ struct FlatStruct {
 #[hegel::test]
 fn flat_struct_roundtrip(tc: TestCase) {
     let val = FlatStruct {
-        name: tc.draw(kdl_safe_string()),
+        name: tc.draw(text()),
         count: tc.draw(integers()),
         enabled: tc.draw(booleans()),
         ratio: tc.draw(finite_f64()),
@@ -63,9 +61,9 @@ struct Outer {
 #[hegel::test]
 fn nested_struct_roundtrip(tc: TestCase) {
     let val = Outer {
-        label: tc.draw(kdl_safe_string()),
+        label: tc.draw(text()),
         inner: Inner {
-            host: tc.draw(kdl_safe_string()),
+            host: tc.draw(text()),
             port: tc.draw(integers()),
         },
     };
@@ -85,8 +83,8 @@ struct WithVecStrings {
 #[hegel::test]
 fn vec_strings_roundtrip(tc: TestCase) {
     let val = WithVecStrings {
-        label: tc.draw(kdl_safe_string()),
-        tags: tc.draw(vecs(kdl_safe_string()).max_size(10)),
+        label: tc.draw(text()),
+        tags: tc.draw(vecs(text())),
     };
     let serialized = serde_kdl2::to_string(&val).unwrap();
     let deserialized: WithVecStrings = serde_kdl2::from_str(&serialized).unwrap();
@@ -102,8 +100,8 @@ struct WithVecInts {
 #[hegel::test]
 fn vec_ints_roundtrip(tc: TestCase) {
     let val = WithVecInts {
-        label: tc.draw(kdl_safe_string()),
-        numbers: tc.draw(vecs(integers::<i64>()).max_size(10)),
+        label: tc.draw(text()),
+        numbers: tc.draw(vecs(integers::<i64>())),
     };
     let serialized = serde_kdl2::to_string(&val).unwrap();
     let deserialized: WithVecInts = serde_kdl2::from_str(&serialized).unwrap();
@@ -126,16 +124,16 @@ struct WithItems {
 
 #[hegel::test]
 fn vec_structs_roundtrip(tc: TestCase) {
-    let count = tc.draw(integers::<usize>().min_value(2).max_value(4));
+    let count = tc.draw(integers::<usize>().max_value(10));
     let mut items = Vec::new();
     for _ in 0..count {
         items.push(Item {
-            name: tc.draw(kdl_safe_string()),
+            name: tc.draw(text()),
             value: tc.draw(integers()),
         });
     }
     let val = WithItems {
-        title: tc.draw(kdl_safe_string()),
+        title: tc.draw(text()),
         item: items,
     };
     let serialized = serde_kdl2::to_string(&val).unwrap();
@@ -159,8 +157,8 @@ struct WithOptions {
 #[hegel::test]
 fn option_fields_roundtrip(tc: TestCase) {
     let val = WithOptions {
-        required: tc.draw(kdl_safe_string()),
-        maybe_str: tc.draw(optional(kdl_safe_string())),
+        required: tc.draw(text()),
+        maybe_str: tc.draw(optional(text())),
         maybe_num: tc.draw(optional(integers::<i64>())),
         maybe_bool: tc.draw(optional(booleans())),
     };
@@ -187,7 +185,7 @@ struct WithEnum {
 #[hegel::test]
 fn unit_enum_roundtrip(tc: TestCase) {
     let val = WithEnum {
-        label: tc.draw(kdl_safe_string()),
+        label: tc.draw(text()),
         color: tc.draw(sampled_from(vec![Color::Red, Color::Green, Color::Blue])),
     };
     let serialized = serde_kdl2::to_string(&val).unwrap();
@@ -224,7 +222,7 @@ fn complex_enum_roundtrip(tc: TestCase) {
         _ => Shape::Point,
     };
     let val = WithShape {
-        name: tc.draw(kdl_safe_string()),
+        name: tc.draw(text()),
         shape,
     };
     let serialized = serde_kdl2::to_string(&val).unwrap();
@@ -242,13 +240,13 @@ struct WithMap {
 
 #[hegel::test]
 fn btreemap_roundtrip(tc: TestCase) {
-    let count = tc.draw(integers::<usize>().min_value(0).max_value(4));
+    let keys = tc.draw(vecs(kdl_identifier()).unique(true));
     let mut metadata = BTreeMap::new();
-    for _ in 0..count {
-        metadata.insert(tc.draw(kdl_identifier()), tc.draw(kdl_safe_string()));
+    for key in keys {
+        metadata.insert(key, tc.draw(text()));
     }
     let val = WithMap {
-        title: tc.draw(kdl_safe_string()),
+        title: tc.draw(text()),
         metadata,
     };
     let serialized = serde_kdl2::to_string(&val).unwrap();
@@ -319,7 +317,7 @@ struct WithTuple {
 #[hegel::test]
 fn tuple_roundtrip(tc: TestCase) {
     let val = WithTuple {
-        label: tc.draw(kdl_safe_string()),
+        label: tc.draw(text()),
         pair: (tc.draw(integers()), tc.draw(integers())),
     };
     let serialized = serde_kdl2::to_string(&val).unwrap();
@@ -349,9 +347,9 @@ struct Level1 {
 #[hegel::test]
 fn deeply_nested_roundtrip(tc: TestCase) {
     let val = Level1 {
-        name: tc.draw(kdl_safe_string()),
+        name: tc.draw(text()),
         level2: Level2 {
-            tag: tc.draw(kdl_safe_string()),
+            tag: tc.draw(text()),
             level3: Level3 {
                 value: tc.draw(integers()),
             },
@@ -379,11 +377,11 @@ struct KitchenSink {
 #[hegel::test]
 fn kitchen_sink_roundtrip(tc: TestCase) {
     let val = KitchenSink {
-        s: tc.draw(kdl_safe_string()),
+        s: tc.draw(text()),
         i: tc.draw(integers()),
         b: tc.draw(booleans()),
         f: tc.draw(finite_f64()),
-        tags: tc.draw(vecs(kdl_safe_string()).max_size(5)),
+        tags: tc.draw(vecs(text())),
         opt: tc.draw(optional(integers::<i32>())),
     };
     let serialized = serde_kdl2::to_string(&val).unwrap();
@@ -396,7 +394,7 @@ fn kitchen_sink_roundtrip(tc: TestCase) {
 #[hegel::test]
 fn pretty_print_roundtrip(tc: TestCase) {
     let val = FlatStruct {
-        name: tc.draw(kdl_safe_string()),
+        name: tc.draw(text()),
         count: tc.draw(integers()),
         enabled: tc.draw(booleans()),
         ratio: tc.draw(finite_f64()),
@@ -424,12 +422,12 @@ struct WithNewtype {
 fn newtype_enum_roundtrip(tc: TestCase) {
     let variant = tc.draw(booleans());
     let wrapped = if variant {
-        Wrapper::Text(tc.draw(kdl_safe_string()))
+        Wrapper::Text(tc.draw(text()))
     } else {
         Wrapper::Number(tc.draw(integers()))
     };
     let val = WithNewtype {
-        label: tc.draw(kdl_safe_string()),
+        label: tc.draw(text()),
         wrapped,
     };
     let serialized = serde_kdl2::to_string(&val).unwrap();
