@@ -170,6 +170,25 @@ just release X.Y.Z
 This bumps the version in `Cargo.toml`, commits, tags, and pushes. GitHub
 Actions then publishes the crate to crates.io and creates a GitHub release.
 
+## Potential upstream issues
+
+Property testing surfaced two roundtrip failures that appear to originate in
+the `kdl` crate (v6.5). These need further investigation to confirm root
+causes and determine whether to file upstream issues.
+
+**Control character escaping.** Strings containing certain control characters
+serialize to invalid KDL that the parser rejects. The kdl crate's `Display`
+for string values escapes `\\`, `"`, `\n`, `\r`, `\t`, `\b`, and `\f`, but
+appears to write other control characters verbatim. serde-kdl2 works around
+this by setting a custom `value_repr` with `\u{…}` escapes on affected
+entries. See `string_entry()` in `ser.rs`.
+
+**`i128::MIN` roundtrip failure.** Serializing `i128::MIN` produces valid KDL
+text, but the kdl parser rejects it. Possibly a sign-magnitude overflow during
+parsing (the absolute value of `i128::MIN` exceeds `i128::MAX`), but this
+hasn't been confirmed by reading the parser source. serde-kdl2 doesn't work
+around this — callers should avoid `i128::MIN` if roundtripping matters.
+
 ## AI Usage
 
 I built this crate with substantial help from Claude (Anthropic). The AI
