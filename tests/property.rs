@@ -434,3 +434,208 @@ fn newtype_enum_roundtrip(tc: TestCase) {
     let deserialized: WithNewtype = serde_kdl2::from_str(&serialized).unwrap();
     assert_eq!(val, deserialized);
 }
+
+// ── Parse robustness ─────────────────────────────────────────────────────
+
+/// Parsing arbitrary text must never panic — it should return Ok or Err.
+#[hegel::test]
+fn from_str_never_panics(tc: TestCase) {
+    let input: String = tc.draw(text());
+    let _ = serde_kdl2::from_str::<FlatStruct>(&input);
+}
+
+// ── Consistency: to_string vs to_string_pretty ───────────────────────────
+
+/// Both serialization paths must produce output that deserializes to the
+/// same value.
+#[hegel::test]
+fn to_string_and_pretty_agree(tc: TestCase) {
+    let val = FlatStruct {
+        name: tc.draw(text()),
+        count: tc.draw(integers()),
+        enabled: tc.draw(booleans()),
+        ratio: tc.draw(finite_f64()),
+    };
+    let compact = serde_kdl2::to_string(&val).unwrap();
+    let pretty = serde_kdl2::to_string_pretty(&val).unwrap();
+    let from_compact: FlatStruct = serde_kdl2::from_str(&compact).unwrap();
+    let from_pretty: FlatStruct = serde_kdl2::from_str(&pretty).unwrap();
+    assert_eq!(from_compact, from_pretty);
+}
+
+// ── Consistency: to_doc/from_doc vs to_string/from_str ───────────────────
+
+/// The doc API and the string API must agree.
+#[hegel::test]
+fn doc_api_matches_string_api(tc: TestCase) {
+    let val = FlatStruct {
+        name: tc.draw(text()),
+        count: tc.draw(integers()),
+        enabled: tc.draw(booleans()),
+        ratio: tc.draw(finite_f64()),
+    };
+    let from_string: FlatStruct =
+        serde_kdl2::from_str(&serde_kdl2::to_string(&val).unwrap()).unwrap();
+    let from_doc: FlatStruct =
+        serde_kdl2::from_doc(&serde_kdl2::to_doc(&val).unwrap()).unwrap();
+    assert_eq!(from_string, from_doc);
+}
+
+// ── Char roundtrip ───────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct WithChar {
+    label: String,
+    letter: char,
+}
+
+#[hegel::test]
+fn char_roundtrip(tc: TestCase) {
+    let val = WithChar {
+        label: tc.draw(text()),
+        letter: tc.draw(integers::<u32>().min_value(0x20).max_value(0x10FFFF)
+            .filter(|&cp| !(0xD800..=0xDFFF).contains(&cp))
+            .map(|cp| char::from_u32(cp).unwrap())),
+    };
+    let serialized = serde_kdl2::to_string(&val).unwrap();
+    let deserialized: WithChar = serde_kdl2::from_str(&serialized).unwrap();
+    assert_eq!(val, deserialized);
+}
+
+// ── i128/u128 roundtrip ──────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct Wide {
+    signed: i128,
+    unsigned: u128,
+}
+
+/// i128 and u128 roundtrip within the range that KDL can represent as
+/// integers (the kdl crate uses i128 internally, and u128::MAX overflows).
+#[hegel::test]
+fn i128_u128_roundtrip(tc: TestCase) {
+    let val = Wide {
+        signed: tc.draw(integers()),
+        // u128 values above i128::MAX overflow the kdl crate's i128 storage.
+        unsigned: tc.draw(integers::<u128>().max_value(i128::MAX as u128)),
+    };
+    let serialized = serde_kdl2::to_string(&val).unwrap();
+    let deserialized: Wide = serde_kdl2::from_str(&serialized).unwrap();
+    assert_eq!(val, deserialized);
+}
+
+// ── f32 roundtrip ────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct WithF32 {
+    value: f32,
+}
+
+#[hegel::test]
+fn f32_roundtrip(tc: TestCase) {
+    let val = WithF32 {
+        value: tc.draw(floats::<f32>().allow_nan(false).allow_infinity(false)),
+    };
+    let serialized = serde_kdl2::to_string(&val).unwrap();
+    let deserialized: WithF32 = serde_kdl2::from_str(&serialized).unwrap();
+    assert_eq!(val, deserialized);
+}
+
+// ── Newtype struct roundtrip ─────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct Meters(f64);
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct WithNewtype2 {
+    length: Meters,
+}
+
+#[hegel::test]
+fn newtype_struct_roundtrip(tc: TestCase) {
+    let val = WithNewtype2 {
+        length: Meters(tc.draw(finite_f64())),
+    };
+    let serialized = serde_kdl2::to_string(&val).unwrap();
+    let deserialized: WithNewtype2 = serde_kdl2::from_str(&serialized).unwrap();
+    assert_eq!(val, deserialized);
+}
+
+// ── Tuple struct roundtrip ───────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct Point3D(f64, f64, f64);
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct WithTupleStruct {
+    pos: Point3D,
+}
+
+#[hegel::test]
+fn tuple_struct_roundtrip(tc: TestCase) {
+    let val = WithTupleStruct {
+        pos: Point3D(
+            tc.draw(finite_f64()),
+            tc.draw(finite_f64()),
+            tc.draw(finite_f64()),
+        ),
+    };
+    let serialized = serde_kdl2::to_string(&val).unwrap();
+    let deserialized: WithTupleStruct = serde_kdl2::from_str(&serialized).unwrap();
+    assert_eq!(val, deserialized);
+}
+
+// ── Tuple enum variant roundtrip ─────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+enum Data {
+    Point(f64, f64, f64),
+    Pair(String, i32),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct WithData {
+    data: Data,
+}
+
+#[hegel::test]
+fn tuple_enum_variant_roundtrip(tc: TestCase) {
+    let variant = tc.draw(booleans());
+    let data = if variant {
+        Data::Point(
+            tc.draw(finite_f64()),
+            tc.draw(finite_f64()),
+            tc.draw(finite_f64()),
+        )
+    } else {
+        Data::Pair(tc.draw(text()), tc.draw(integers()))
+    };
+    let val = WithData { data };
+    let serialized = serde_kdl2::to_string(&val).unwrap();
+    let deserialized: WithData = serde_kdl2::from_str(&serialized).unwrap();
+    assert_eq!(val, deserialized);
+}
+
+// ── HashMap roundtrip ────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct WithHashMap {
+    title: String,
+    metadata: std::collections::HashMap<String, String>,
+}
+
+#[hegel::test]
+fn hashmap_roundtrip(tc: TestCase) {
+    let keys = tc.draw(vecs(kdl_identifier()).unique(true));
+    let mut metadata = std::collections::HashMap::new();
+    for key in keys {
+        metadata.insert(key, tc.draw(text()));
+    }
+    let val = WithHashMap {
+        title: tc.draw(text()),
+        metadata,
+    };
+    let serialized = serde_kdl2::to_string(&val).unwrap();
+    let deserialized: WithHashMap = serde_kdl2::from_str(&serialized).unwrap();
+    assert_eq!(val, deserialized);
+}
