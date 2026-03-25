@@ -476,8 +476,7 @@ fn doc_api_matches_string_api(tc: TestCase) {
     };
     let from_string: FlatStruct =
         serde_kdl2::from_str(&serde_kdl2::to_string(&val).unwrap()).unwrap();
-    let from_doc: FlatStruct =
-        serde_kdl2::from_doc(&serde_kdl2::to_doc(&val).unwrap()).unwrap();
+    let from_doc: FlatStruct = serde_kdl2::from_doc(&serde_kdl2::to_doc(&val).unwrap()).unwrap();
     assert_eq!(from_string, from_doc);
 }
 
@@ -493,9 +492,13 @@ struct WithChar {
 fn char_roundtrip(tc: TestCase) {
     let val = WithChar {
         label: tc.draw(text()),
-        letter: tc.draw(integers::<u32>().min_value(0x20).max_value(0x10FFFF)
-            .filter(|&cp| !(0xD800..=0xDFFF).contains(&cp))
-            .map(|cp| char::from_u32(cp).unwrap())),
+        letter: tc.draw(
+            integers::<u32>()
+                .min_value(0x20)
+                .max_value(0x10FFFF)
+                .filter(|&cp| !(0xD800..=0xDFFF).contains(&cp))
+                .map(|cp| char::from_u32(cp).unwrap()),
+        ),
     };
     let serialized = serde_kdl2::to_string(&val).unwrap();
     let deserialized: WithChar = serde_kdl2::from_str(&serialized).unwrap();
