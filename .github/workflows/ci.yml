@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
       - run: rustup component add clippy rustfmt llvm-tools
       - run: cargo install grcov cargo-mutants just
       - run: cargo fmt --check
